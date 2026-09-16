@@ -1,0 +1,500 @@
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  TextInput,
+  ActivityIndicator,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import Ionicons from "@react-native-vector-icons/ionicons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
+import { api, Business } from "@/src/api";
+import { colors, radius, spacing, type as tType } from "@/src/theme";
+
+type ReviewT = {
+  review_id: string;
+  user_name: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+};
+
+export default function BusinessDetail() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [biz, setBiz] = useState<Business | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [activeImg, setActiveImg] = useState(0);
+  const [reviews, setReviews] = useState<ReviewT[]>([]);
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState("");
+  const [postingReview, setPostingReview] = useState(false);
+
+  const loadReviews = useCallback(async () => {
+    try {
+      const rs = await api<ReviewT[]>(`/businesses/${id}/reviews`);
+      setReviews(rs);
+    } catch (e) { console.log("reviews", e); }
+  }, [id]);
+
+  const submitReview = async () => {
+    if (!newComment.trim()) return;
+    setPostingReview(true);
+    try {
+      await api("/reviews", {
+        method: "POST", auth: true,
+        body: JSON.stringify({ business_id: id, rating: newRating, comment: newComment.trim() }),
+      });
+      setNewComment("");
+      setNewRating(5);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await loadReviews();
+    } catch (e) { console.log("post review", e); }
+    finally { setPostingReview(false); }
+  };
+
+  const load = useCallback(async () => {
+    try {
+      const [b, savedList] = await Promise.all([
+        api<Business>(`/businesses/${id}`),
+        api<Business[]>("/saved", { auth: true }).catch(() => []),
+      ]);
+      setBiz(b);
+      setSaved(savedList.some((s) => s.business_id === id));
+    } catch (e) {
+      console.log("business detail", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => { load(); loadReviews(); }, [load, loadReviews]);
+
+  const toggleSave = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const r = await api<{ saved: boolean }>(`/saved/toggle`, {
+        method: "POST", auth: true,
+        body: JSON.stringify({ business_id: id }),
+      });
+      setSaved(r.saved);
+    } catch (e) { console.log(e); }
+  };
+
+  if (loading || !biz) {
+    return (
+      <View style={styles.loader}>
+        <ActivityIndicator color={colors.brandPrimary} />
+      </View>
+    );
+  }
+
+  const width = Dimensions.get("window").width;
+  const bookLabel = biz.booking_type === "appointment" ? "Book Appointment"
+    : biz.booking_type === "instant" ? "Book Now" : "Reserve Table";
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+        {/* Gallery */}
+        <View style={{ height: 380 }}>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => setActiveImg(Math.round(e.nativeEvent.contentOffset.x / width))}
+          >
+            {biz.gallery.map((uri, i) => (
+              <Image key={i} source={{ uri }} style={{ width, height: 380 }} contentFit="cover" />
+            ))}
+          </ScrollView>
+          <LinearGradient
+            colors={["rgba(17,17,17,0.35)", "transparent"]}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, height: 120 }}
+          />
+          {/* Header buttons */}
+          <View style={[styles.topBar, { top: insets.top + spacing.sm }]}>
+            <Pressable testID="back-btn" style={styles.iconBtn} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={20} color="#FFF" />
+            </Pressable>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable testID="save-btn" style={styles.iconBtn} onPress={toggleSave}>
+                <Ionicons name={saved ? "heart" : "heart-outline"} size={20} color={saved ? colors.brandTertiary : "#FFF"} />
+              </Pressable>
+              <Pressable style={styles.iconBtn} onPress={() => {}}>
+                <Ionicons name="share-outline" size={20} color="#FFF" />
+              </Pressable>
+            </View>
+          </View>
+          {/* dots */}
+          <View style={styles.dots}>
+            {biz.gallery.map((_, i) => (
+              <View key={i} style={[styles.dot, i === activeImg && styles.dotActive]} />
+            ))}
+          </View>
+        </View>
+
+        {/* Info */}
+        <View style={{ padding: spacing.lg }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: spacing.sm }}>
+            {biz.tags.map((t) => (
+              <View key={t} style={styles.tag}><Text style={styles.tagText}>{t}</Text></View>
+            ))}
+          </View>
+          <Text style={styles.title} testID="business-name">{biz.name}</Text>
+          <View style={styles.metaRow}>
+            <Ionicons name="star" size={14} color={colors.warning} />
+            <Text style={styles.metaBold}>{biz.rating.toFixed(1)}</Text>
+            <Text style={styles.metaLight}>  ({biz.review_count.toLocaleString()} reviews)</Text>
+            <Text style={styles.dot2}>•</Text>
+            <Text style={styles.metaLight}>{biz.price_range}</Text>
+          </View>
+          <View style={styles.addressRow}>
+            <Ionicons name="location-outline" size={16} color={colors.onSurfaceTertiary} />
+            <Text style={styles.address}>{biz.address}</Text>
+          </View>
+          <View style={styles.addressRow}>
+            <Ionicons name="time-outline" size={16} color={colors.onSurfaceTertiary} />
+            <Text style={styles.address}>{biz.open_hours}</Text>
+          </View>
+
+          <Text style={styles.desc}>{biz.description}</Text>
+
+          {/* Offers */}
+          {biz.offers.length > 0 && (
+            <View style={{ marginTop: spacing.xl }}>
+              <Text style={styles.section}>Offers</Text>
+              {biz.offers.map((o, i) => (
+                <View key={i} style={styles.offerRow}>
+                  <Ionicons name="pricetag" size={16} color={colors.brandTertiary} />
+                  <Text style={styles.offerText}>{o}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Menu */}
+          {biz.menu?.length > 0 && (
+            <View style={{ marginTop: spacing.xl }}>
+              <Text style={styles.section}>Menu highlights</Text>
+              <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+                {biz.menu.map((m, i) => (
+                  <View key={i} style={styles.menuRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.menuName}>{m.name}</Text>
+                      <Text style={styles.menuPrice}>₹{m.price.toLocaleString()}</Text>
+                    </View>
+                    {m.image ? <Image source={{ uri: m.image }} style={styles.menuImg} contentFit="cover" /> : null}
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Services */}
+          {biz.services?.length > 0 && (
+            <View style={{ marginTop: spacing.xl }}>
+              <Text style={styles.section}>Services</Text>
+              <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+                {biz.services.map((s, i) => (
+                  <View key={i} style={styles.svcRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.menuName}>{s.name}</Text>
+                      <Text style={styles.menuPrice}>{s.duration} · ₹{s.price.toLocaleString()}</Text>
+                    </View>
+                    <Pressable
+                      testID={`svc-book-${i}`}
+                      onPress={() => router.push({ pathname: `/book/${biz.business_id}`, params: { service: s.name } })}
+                      style={styles.svcBtn}
+                    >
+                      <Text style={styles.svcBtnText}>Book</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Reviews */}
+          <View style={{ marginTop: spacing.xl }}>
+            <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" }}>
+              <Text style={styles.section}>Reviews</Text>
+              <Text style={styles.reviewCount}>{reviews.length} guest review{reviews.length === 1 ? "" : "s"}</Text>
+            </View>
+
+            {/* Compose */}
+            <View style={styles.composer}>
+              <Text style={styles.composerLabel}>Rate your experience</Text>
+              <View style={styles.starRow}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Pressable
+                    key={n}
+                    testID={`star-${n}`}
+                    onPress={() => setNewRating(n)}
+                    hitSlop={6}
+                  >
+                    <Ionicons
+                      name={n <= newRating ? "star" : "star-outline"}
+                      size={28}
+                      color={n <= newRating ? colors.warning : colors.borderStrong}
+                    />
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput
+                testID="review-input"
+                value={newComment}
+                onChangeText={setNewComment}
+                placeholder="Share your experience…"
+                placeholderTextColor={colors.onSurfaceTertiary}
+                multiline
+                style={styles.reviewInput}
+              />
+              <Pressable
+                testID="review-submit"
+                disabled={postingReview || !newComment.trim()}
+                onPress={submitReview}
+                style={[
+                  styles.reviewSubmit,
+                  (!newComment.trim() || postingReview) && { opacity: 0.5 },
+                ]}
+              >
+                {postingReview ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.reviewSubmitText}>Post review</Text>
+                )}
+              </Pressable>
+            </View>
+
+            {/* List */}
+            {reviews.length === 0 ? (
+              <Text style={styles.emptyReview}>Be the first to leave a review.</Text>
+            ) : (
+              <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+                {reviews.map((r) => (
+                  <View key={r.review_id} style={styles.reviewCard}>
+                    <View style={styles.reviewHead}>
+                      <View style={styles.reviewAvatar}>
+                        <Text style={styles.reviewAvatarText}>
+                          {(r.user_name?.[0] || "U").toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.reviewName}>{r.user_name}</Text>
+                        <View style={{ flexDirection: "row" }}>
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <Ionicons
+                              key={n}
+                              name={n <= r.rating ? "star" : "star-outline"}
+                              size={12}
+                              color={n <= r.rating ? colors.warning : colors.borderStrong}
+                            />
+                          ))}
+                        </View>
+                      </View>
+                      <Text style={styles.reviewDate}>
+                        {new Date(r.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    <Text style={styles.reviewText}>{r.comment}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Sticky booking bar */}
+      <View style={[styles.bookBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.bookPrice}>{biz.price_range} · {biz.category}</Text>
+          <Text style={styles.bookHint}>Instant confirmation · Earn 50 points</Text>
+        </View>
+        <Pressable
+          testID="book-now-button"
+          onPress={() => router.push(`/book/${biz.business_id}`)}
+          style={styles.bookBtn}
+        >
+          <Text style={styles.bookBtnText}>{bookLabel}</Text>
+          <Ionicons name="arrow-forward" size={18} color="#FFF" />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  topBar: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(17,17,17,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dots: {
+    position: "absolute",
+    bottom: 12,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 4,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.5)" },
+  dotActive: { backgroundColor: "#FFF", width: 18 },
+
+  tag: {
+    paddingHorizontal: 10,
+    height: 24,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tagText: { fontSize: 11, color: colors.onSurfaceSecondary, fontWeight: "600" },
+
+  title: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 },
+  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  metaBold: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface, marginLeft: 3 },
+  metaLight: { fontSize: tType.base, color: colors.onSurfaceTertiary },
+  dot2: { color: colors.onSurfaceTertiary, marginHorizontal: 6 },
+
+  addressRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.sm, gap: 6 },
+  address: { fontSize: tType.base, color: colors.onSurfaceSecondary, flex: 1 },
+
+  desc: { fontSize: tType.base, lineHeight: 22, color: colors.onSurfaceSecondary, marginTop: spacing.lg },
+
+  section: { fontSize: tType.xl, fontWeight: "700", color: colors.onSurface, letterSpacing: -0.3, marginBottom: spacing.sm },
+  offerRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  offerText: { fontSize: tType.base, color: colors.onSurface, fontWeight: "500" },
+
+  menuRow: {
+    flexDirection: "row",
+    padding: spacing.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  menuName: { fontSize: tType.lg, fontWeight: "600", color: colors.onSurface },
+  menuPrice: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
+  menuImg: { width: 56, height: 56, borderRadius: radius.md },
+
+  svcRow: {
+    flexDirection: "row",
+    padding: spacing.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  svcBtn: {
+    paddingHorizontal: 16,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  svcBtnText: { color: "#FFF", fontWeight: "700", fontSize: tType.sm },
+
+  reviewCount: { fontSize: tType.sm, color: colors.onSurfaceTertiary, fontWeight: "600" },
+  composer: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  composerLabel: { fontSize: tType.sm, fontWeight: "600", color: colors.onSurfaceTertiary, marginBottom: 8 },
+  starRow: { flexDirection: "row", gap: 6 },
+  reviewInput: {
+    marginTop: spacing.md,
+    minHeight: 80,
+    padding: spacing.md,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    color: colors.onSurface,
+    fontSize: tType.base,
+    textAlignVertical: "top",
+  },
+  reviewSubmit: {
+    marginTop: spacing.md,
+    alignSelf: "flex-start",
+    paddingHorizontal: 20,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 120,
+  },
+  reviewSubmitText: { color: "#FFF", fontSize: tType.base, fontWeight: "700" },
+  emptyReview: { marginTop: spacing.md, color: colors.onSurfaceTertiary, fontSize: tType.base },
+  reviewCard: {
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  reviewHead: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  reviewAvatar: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center", justifyContent: "center",
+  },
+  reviewAvatarText: { color: "#FFF", fontWeight: "700", fontSize: tType.sm },
+  reviewName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  reviewDate: { fontSize: 11, color: colors.onSurfaceTertiary },
+  reviewText: { fontSize: tType.base, color: colors.onSurfaceSecondary, marginTop: spacing.sm, lineHeight: 20 },
+
+  bookBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  bookPrice: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  bookHint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
+  bookBtn: {
+    height: 52,
+    borderRadius: radius.pill,
+    paddingHorizontal: 20,
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  bookBtnText: { color: "#FFF", fontSize: tType.lg, fontWeight: "700" },
+});
