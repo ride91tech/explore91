@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, StyleSheet, TextInput } from "react-native";
 import { Image } from "expo-image";
 import { api } from "@/src/api";
 import { colors, spacing, type as tType } from "@/src/theme";
-import { PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty, Card } from "@/src/components/admin/ui";
+import { PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty, Card, Loading } from "@/src/components/admin/ui";
+import { useAsyncAction } from "@/src/components/admin/feedback";
 
 type Banner = {
   banner_id: string;
@@ -28,49 +29,59 @@ export default function BannersAdmin() {
   const [linkUrl, setLinkUrl] = useState("");
   const [city, setCity] = useState("");
   const [position, setPosition] = useState("home_promo");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const { run, isBusy } = useAsyncAction();
 
   const load = useCallback(async () => {
-    try {
-      const list = await api<Banner[]>("/admin/banners", { auth: true });
-      setItems(list);
-    } catch (e) { console.log(e); }
-    finally { setLoading(false); }
+    setItems(await api<Banner[]>("/admin/banners", { auth: true }));
   }, []);
-  useEffect(() => { load(); }, [load]);
 
-  const add = async () => {
-    setErr(null);
-    if (!title.trim()) return setErr("Title is required.");
-    if (!/^https:\/\//.test(image)) return setErr("Image must be an https:// URL.");
-    if (linkUrl && !/^https:\/\//.test(linkUrl)) return setErr("Link URL must be an https:// URL.");
-    setBusy(true);
-    try {
-      await api("/admin/banners", {
-        method: "POST", auth: true,
-        body: JSON.stringify({
-          title, subtitle: subtitle || null, image,
-          link_url: linkUrl || null, city: city || null, position,
-          is_active: true, sort_order: 0,
-        }),
-      });
-      setTitle(""); setSubtitle(""); setImage(""); setLinkUrl(""); setCity("");
+  useEffect(() => {
+    run("load", load).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const add = () =>
+    run(
+      "add",
+      async () => {
+        if (!title.trim()) throw new Error("Title is required.");
+        if (!/^https:\/\//.test(image)) throw new Error("Image must be an https:// URL.");
+        if (linkUrl && !/^https:\/\//.test(linkUrl)) throw new Error("Link URL must be an https:// URL.");
+        await api("/admin/banners", {
+          method: "POST", auth: true,
+          body: JSON.stringify({
+            title, subtitle: subtitle || null, image,
+            link_url: linkUrl || null, city: city || null, position,
+            is_active: true, sort_order: 0,
+          }),
+        });
+        setTitle(""); setSubtitle(""); setImage(""); setLinkUrl(""); setCity("");
+        await load();
+      },
+      "Banner published."
+    );
+
+  const toggle = (b: Banner) =>
+    run(
+      b.banner_id,
+      async () => {
+        await api(`/admin/banners/${b.banner_id}`, {
+          method: "PATCH", auth: true, body: JSON.stringify({ is_active: !b.is_active }),
+        });
+        await load();
+      },
+      b.is_active ? "Banner paused." : "Banner is live again."
+    );
+
+  const del = (b: Banner) => {
+    if (typeof window !== "undefined" &&
+        !window.confirm(`Delete the banner "${b.title}"?\n\nThis cannot be undone.`)) {
+      return;
+    }
+    run(b.banner_id, async () => {
+      await api(`/admin/banners/${b.banner_id}`, { method: "DELETE", auth: true });
       await load();
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to create banner");
-    } finally { setBusy(false); }
-  };
-
-  const toggle = async (b: Banner) => {
-    await api(`/admin/banners/${b.banner_id}`, { method: "PATCH", auth: true, body: JSON.stringify({ is_active: !b.is_active }) });
-    load();
-  };
-
-  const del = async (id: string) => {
-    if (typeof window !== "undefined" && !window.confirm("Delete this banner?")) return;
-    await api(`/admin/banners/${id}`, { method: "DELETE", auth: true });
-    load();
+    }, "Banner deleted.");
   };
 
   return (
@@ -99,13 +110,12 @@ export default function BannersAdmin() {
           </View>
         </View>
         <View style={{ marginTop: 12, alignItems: "flex-start" }}>
-          <Btn testID="banner-add" label={busy ? "Publishing…" : "Publish banner"} onPress={add} disabled={busy} />
+          <Btn testID="banner-add" label="Publish banner" busy={isBusy("add")} onPress={add} />
         </View>
-        {err ? <Text style={styles.err}>{err}</Text> : null}
       </Card>
 
       {loading ? (
-        <ActivityIndicator color={colors.brandPrimary} />
+        <Loading label="Loading banners…" />
       ) : (
         <Table>
           <TableHead cols={[{ label: "Banner", width: 3 }, { label: "Position", width: 1.2 }, { label: "City", width: 1 }, { label: "Status", width: 1 }, { label: "Actions", width: 2 }]} />
@@ -127,8 +137,8 @@ export default function BannersAdmin() {
               </Cell>
               <Cell width={2}>
                 <View style={{ flexDirection: "row", gap: 6 }}>
-                  <Btn testID={`bn-toggle-${b.banner_id}`} small tone="secondary" label={b.is_active ? "Pause" : "Resume"} onPress={() => toggle(b)} />
-                  <Btn testID={`bn-del-${b.banner_id}`} small tone="danger" label="Delete" onPress={() => del(b.banner_id)} />
+                  <Btn testID={`bn-toggle-${b.banner_id}`} small tone="secondary" label={b.is_active ? "Pause" : "Resume"} busy={isBusy(b.banner_id)} onPress={() => toggle(b)} />
+                  <Btn testID={`bn-del-${b.banner_id}`} small tone="danger" label="Delete" busy={isBusy(b.banner_id)} onPress={() => del(b)} />
                 </View>
               </Cell>
             </TableRow>

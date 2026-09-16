@@ -99,6 +99,10 @@ class Booking(BaseModel):
     service_name: Optional[str] = None
     status: str = "confirmed"
     notes: Optional[str] = ""
+    # Money is snapshotted at booking time so later price edits don't rewrite history.
+    amount_inr: int = 0
+    # "service" = matched a real priced item; "estimate" = derived from price_range.
+    amount_source: str = "estimate"
     created_at: datetime
 
 

@@ -1,4 +1,4 @@
-"""Security verification tests for Explore91 — SEC-001, SEC-002, SEC-003, and input validation."""
+﻿"""Security verification tests for Explore91 â€” SEC-001, SEC-002, SEC-003, and input validation."""
 import os
 import time
 import uuid
@@ -134,7 +134,7 @@ class TestSEC002RegexSafety:
         elapsed = time.time() - t0
         assert r.status_code == 200, r.text
         assert elapsed < 2.0, f"ReDoS pattern took {elapsed:.2f}s (>2s)"
-        # Should be empty/finite result — no business name contains this literal string
+        # Should be empty/finite result â€” no business name contains this literal string
         assert isinstance(r.json(), list)
 
     def test_special_chars_escaped_literally(self, api_client):
@@ -144,7 +144,7 @@ class TestSEC002RegexSafety:
         names = [b["name"] for b in r.json()]
         # Since `.` is escaped, "C.sa" won't match "Casa Sarita"
         assert not any("Casa Sarita" == n for n in names), \
-            f"Special char `.` was NOT escaped — matched: {names}"
+            f"Special char `.` was NOT escaped â€” matched: {names}"
 
     def test_max_length_enforced(self, api_client):
         r = api_client.get(f"{BASE_URL}/api/businesses",
@@ -229,7 +229,7 @@ class TestSEC003RateLimits:
             pytest.skip("No reels seeded")
         rid = reels[0]["reel_id"]
 
-        # 60/min per IP → hammer 70 times
+        # 60/min per IP â†’ hammer 70 times
         statuses = []
         for i in range(70):
             resp = api_client.post(f"{BASE_URL}/api/reels/{rid}/view")
@@ -256,19 +256,19 @@ class TestInputValidation:
         r = api_client.get(f"{BASE_URL}/api/businesses", params={"city": "goa", "limit": 1})
         biz_id = r.json()[0]["business_id"]
 
-        # rating=6 → 422
+        # rating=6 â†’ 422
         r1 = api_client.post(f"{BASE_URL}/api/reviews",
                              json={"business_id": biz_id, "rating": 6, "comment": "x"},
                              headers=self._hdr(tok))
         assert r1.status_code == 422, r1.text
 
-        # rating=0 → 422
+        # rating=0 â†’ 422
         r2 = api_client.post(f"{BASE_URL}/api/reviews",
                              json={"business_id": biz_id, "rating": 0, "comment": "x"},
                              headers=self._hdr(tok))
         assert r2.status_code == 422, r2.text
 
-        # comment > 1000 chars → 422
+        # comment > 1000 chars â†’ 422
         r3 = api_client.post(f"{BASE_URL}/api/reviews",
                              json={"business_id": biz_id, "rating": 5,
                                    "comment": "a" * 1001},
@@ -280,7 +280,7 @@ class TestInputValidation:
         r = api_client.get(f"{BASE_URL}/api/businesses", params={"city": "goa", "limit": 1})
         biz_id = r.json()[0]["business_id"]
 
-        # guests=0 → 422
+        # guests=0 â†’ 422
         r1 = api_client.post(
             f"{BASE_URL}/api/bookings",
             json={"business_id": biz_id, "date": "2026-06-01", "time": "19:00", "guests": 0},
@@ -288,7 +288,7 @@ class TestInputValidation:
         )
         assert r1.status_code == 422, r1.text
 
-        # guests=100 → 422
+        # guests=100 â†’ 422
         r2 = api_client.post(
             f"{BASE_URL}/api/bookings",
             json={"business_id": biz_id, "date": "2026-06-01", "time": "19:00", "guests": 100},
@@ -323,7 +323,7 @@ class TestInputValidation:
             return biz_id
         biz_id = asyncio.get_event_loop().run_until_complete(_seed_biz())
 
-        # javascript: → 422
+        # javascript: â†’ 422
         r1 = api_client.post(f"{BASE_URL}/api/owner/reels",
                              json={"business_id": biz_id,
                                    "video_url": "javascript:alert(1)",
@@ -331,7 +331,7 @@ class TestInputValidation:
                              headers=self._hdr(tok))
         assert r1.status_code == 422, r1.text
 
-        # ftp:// → 422
+        # ftp:// â†’ 422
         r2 = api_client.post(f"{BASE_URL}/api/owner/reels",
                              json={"business_id": biz_id,
                                    "video_url": "ftp://x.com/vid.mp4",
@@ -339,7 +339,7 @@ class TestInputValidation:
                              headers=self._hdr(tok))
         assert r2.status_code == 422, r2.text
 
-        # https:// → 200
+        # https:// â†’ 200
         r3 = api_client.post(f"{BASE_URL}/api/owner/reels",
                              json={"business_id": biz_id,
                                    "video_url": "https://example.com/vid.mp4",
@@ -352,8 +352,8 @@ class TestInputValidation:
 # --- P3: AI error handling wording ---------------------------------------
 class TestP3AIErrorHandling:
     def test_error_handler_returns_generic_message(self):
-        """Verify the error handler literal (per review request P3 — no live env swap)."""
-        with open("/app/backend/routes/ai.py", "r") as f:
+        """Verify the error handler literal (per review request P3 â€” no live env swap)."""
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "routes", "ai.py"), "r") as f:
             src = f.read()
         # Both AI endpoints must use the generic wording, NOT str(e)
         assert src.count('"AI service temporarily unavailable"') >= 2, \

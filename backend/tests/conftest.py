@@ -10,12 +10,17 @@ import requests
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
-# Ensure /app/backend is importable when the test loads server.py via importlib
-# (needed for the modular package layout: core/, routes/, seed/).
-sys.path.insert(0, "/app/backend")
+# Resolve the repo layout from this file so the suite runs anywhere, not just
+# inside the container where it happened to live at /app.
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_DIR = os.path.dirname(BACKEND_DIR)
+SERVER_PY = os.path.join(BACKEND_DIR, "server.py")
 
-load_dotenv("/app/frontend/.env")
-load_dotenv("/app/backend/.env")
+# Make the modular package layout (core/, routes/, seed/) importable.
+sys.path.insert(0, BACKEND_DIR)
+
+load_dotenv(os.path.join(REPO_DIR, "frontend", ".env"))
+load_dotenv(os.path.join(BACKEND_DIR, ".env"))
 
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "").rstrip("/")
 MONGO_URL = os.environ["MONGO_URL"]

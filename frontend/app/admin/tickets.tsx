@@ -1,8 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, TextInput, Pressable } from "react-native";
-import { api } from "@/src/api";
+import { View, Text, StyleSheet, TextInput, Pressable } from "react-native";
+import { apiPaged, api } from "@/src/api";
 import { colors, spacing, type as tType } from "@/src/theme";
-import { PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty, Card } from "@/src/components/admin/ui";
+import {
+  PageHeader, Btn, Pill, Empty, Card,
+  Pagination, ResultCount, Loading,
+} from "@/src/components/admin/ui";
+import { useAsyncAction } from "@/src/components/admin/feedback";
 
 type Ticket = {
   ticket_id: string;
@@ -15,45 +19,80 @@ type Ticket = {
   created_at: string;
 };
 
+const PAGE = 25;
+
+/** Surfaces how long a ticket has been waiting — the thing that actually matters. */
+function age(iso: string): { label: string; stale: boolean } {
+  const hours = (Date.now() - new Date(iso).getTime()) / 36e5;
+  if (hours < 1) return { label: "just now", stale: false };
+  if (hours < 24) return { label: `${Math.floor(hours)}h old`, stale: hours >= 12 };
+  const days = Math.floor(hours / 24);
+  return { label: `${days}d old`, stale: true };
+}
+
 export default function Tickets() {
   const [items, setItems] = useState<Ticket[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | Ticket["status"]>("all");
+  const [offset, setOffset] = useState(0);
   const [replyOpen, setReplyOpen] = useState<string | null>(null);
   const [reply, setReply] = useState("");
+  const { run, isBusy } = useAsyncAction();
 
   const load = useCallback(async () => {
-    try {
-      const qs = filter === "all" ? "" : `?status=${filter}`;
-      const list = await api<Ticket[]>(`/admin/tickets${qs}`, { auth: true });
-      setItems(list);
-    } catch (e) { console.log(e); }
-    finally { setLoading(false); }
-  }, [filter]);
+    const qs = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
+    if (filter !== "all") qs.append("status", filter);
+    const res = await apiPaged<Ticket>(`/admin/tickets?${qs}`, { auth: true });
+    setItems(res.rows);
+    setTotal(res.total);
+  }, [filter, offset]);
 
-  useEffect(() => { setLoading(true); load(); }, [load]);
+  useEffect(() => {
+    setLoading(true);
+    run("load", load).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
 
-  const sendReply = async (id: string) => {
-    if (!reply.trim()) return;
-    await api(`/admin/tickets/${id}`, { method: "PATCH", auth: true, body: JSON.stringify({ admin_reply: reply, status: "resolved" }) });
-    setReplyOpen(null); setReply("");
-    load();
-  };
+  useEffect(() => { setOffset(0); }, [filter]);
 
-  const setStatus = async (id: string, status: Ticket["status"]) => {
-    await api(`/admin/tickets/${id}`, { method: "PATCH", auth: true, body: JSON.stringify({ status }) });
-    load();
-  };
+  const sendReply = (id: string) =>
+    run(
+      id,
+      async () => {
+        if (!reply.trim()) throw new Error("Write a reply before sending.");
+        await api(`/admin/tickets/${id}`, {
+          method: "PATCH", auth: true,
+          body: JSON.stringify({ admin_reply: reply, status: "resolved" }),
+        });
+        setReplyOpen(null);
+        setReply("");
+        await load();
+      },
+      "Reply sent and ticket resolved."
+    );
+
+  const setStatus = (id: string, status: Ticket["status"]) =>
+    run(
+      id,
+      async () => {
+        await api(`/admin/tickets/${id}`, {
+          method: "PATCH", auth: true, body: JSON.stringify({ status }),
+        });
+        await load();
+      },
+      `Ticket marked ${status}.`
+    );
 
   return (
     <View>
       <PageHeader
         title="Support tickets"
-        subtitle={`${items.length} tickets in this view`}
+        subtitle="Reply, resolve and keep an eye on what's been waiting."
         right={
           <View style={styles.filters}>
             {(["all", "open", "pending", "resolved"] as const).map((f) => (
-              <Pressable key={f} onPress={() => setFilter(f)} style={[styles.chip, filter === f && styles.chipActive]}>
+              <Pressable key={f} testID={`filter-${f}`} onPress={() => setFilter(f)} style={[styles.chip, filter === f && styles.chipActive]}>
                 <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f[0].toUpperCase() + f.slice(1)}</Text>
               </Pressable>
             ))}
@@ -62,18 +101,24 @@ export default function Tickets() {
       />
 
       {loading ? (
-        <ActivityIndicator color={colors.brandPrimary} />
+        <Loading label="Loading tickets…" />
       ) : items.length === 0 ? (
-        <Empty label="No tickets yet." />
+        <Empty label={filter === "open" ? "No open tickets — inbox zero." : "No tickets here."} />
       ) : (
         <View style={{ gap: 16 }}>
-          {items.map((t) => (
+          <ResultCount shown={items.length} total={total} />
+          {items.map((t) => {
+            const a = age(t.created_at);
+            return (
             <Card key={t.ticket_id}>
               <View style={styles.head}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.subject}>{t.subject}</Text>
                   <Text style={styles.meta}>{t.user_name} · {t.user_email} · {new Date(t.created_at).toLocaleString()}</Text>
                 </View>
+                {t.status !== "resolved" ? (
+                  <Pill label={a.label} tone={a.stale ? "err" : "neutral"} />
+                ) : null}
                 <Pill
                   label={t.status}
                   tone={t.status === "resolved" ? "ok" : t.status === "pending" ? "warn" : "brand"}
@@ -99,7 +144,7 @@ export default function Tickets() {
                     style={styles.replyInput}
                   />
                   <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Btn testID={`send-${t.ticket_id}`} tone="primary" label="Send & resolve" onPress={() => sendReply(t.ticket_id)} />
+                    <Btn testID={`send-${t.ticket_id}`} tone="primary" label="Send & resolve" busy={isBusy(t.ticket_id)} onPress={() => sendReply(t.ticket_id)} />
                     <Btn testID={`cancel-${t.ticket_id}`} tone="secondary" label="Cancel" onPress={() => { setReplyOpen(null); setReply(""); }} />
                   </View>
                 </View>
@@ -107,15 +152,17 @@ export default function Tickets() {
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                   <Btn testID={`reply-${t.ticket_id}`} small tone="primary" label={t.admin_reply ? "Update reply" : "Reply"} onPress={() => { setReplyOpen(t.ticket_id); setReply(t.admin_reply || ""); }} />
                   {t.status !== "resolved" ? (
-                    <Btn testID={`resolve-${t.ticket_id}`} small tone="success" label="Mark resolved" onPress={() => setStatus(t.ticket_id, "resolved")} />
+                    <Btn testID={`resolve-${t.ticket_id}`} small tone="success" label="Mark resolved" busy={isBusy(t.ticket_id)} onPress={() => setStatus(t.ticket_id, "resolved")} />
                   ) : null}
                   {t.status === "resolved" ? (
-                    <Btn testID={`reopen-${t.ticket_id}`} small tone="secondary" label="Reopen" onPress={() => setStatus(t.ticket_id, "open")} />
+                    <Btn testID={`reopen-${t.ticket_id}`} small tone="secondary" label="Reopen" busy={isBusy(t.ticket_id)} onPress={() => setStatus(t.ticket_id, "open")} />
                   ) : null}
                 </View>
               )}
             </Card>
-          ))}
+            );
+          })}
+          <Pagination offset={offset} limit={PAGE} total={total} onChange={setOffset} />
         </View>
       )}
     </View>

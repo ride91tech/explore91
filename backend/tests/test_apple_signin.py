@@ -1,14 +1,14 @@
-"""Apple Sign-In backend tests (iteration 5).
+﻿"""Apple Sign-In backend tests (iteration 5).
 
 Covers:
-- Pydantic validation (missing identity_token → 422)
+- Pydantic validation (missing identity_token â†’ 422)
 - Malformed / bogus JWT (401 paths)
 - Bogus 'aud' via a real RS256-signed JWT with mocked JWKS (401)
-- Rate limiting (20/min per IP → 21st call returns 429 + Retry-After)
+- Rate limiting (20/min per IP â†’ 21st call returns 429 + Retry-After)
 - APPLE_AUDIENCES env presence
 - Mongo `users.apple_sub` sparse + unique index
 - User model exposes optional `apple_sub` field on /auth/me
-- Happy-path upsert logic (create → reuse-by-sub → link-by-email) — exercised
+- Happy-path upsert logic (create â†’ reuse-by-sub â†’ link-by-email) â€” exercised
   via TestClient + monkey-patched `_verify_apple_identity_token`
 - Regression spot-check (session flow, businesses filter, reels feed, RBAC 403)
 """
@@ -30,8 +30,11 @@ from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from motor.motor_asyncio import AsyncIOMotorClient
 
-load_dotenv("/app/frontend/.env")
-load_dotenv("/app/backend/.env")
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REPO_DIR = os.path.dirname(_BACKEND_DIR)
+_SERVER_PY = os.path.join(_BACKEND_DIR, "server.py")
+load_dotenv(os.path.join(_REPO_DIR, "frontend", ".env"))
+load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
 BASE_URL = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/")
 MONGO_URL = os.environ["MONGO_URL"]
@@ -84,7 +87,7 @@ class TestAppleSignInErrorPaths:
         assert r.json().get("detail") == "Malformed Apple identity token"
 
     def test_bogus_but_wellformed_jwt_returns_401(self):
-        """3 base64url segments, header parses, but kid is bogus → 401."""
+        """3 base64url segments, header parses, but kid is bogus â†’ 401."""
         token = _make_fake_jwt(
             {"alg": "RS256", "kid": "definitely-not-a-real-kid-xyz", "typ": "JWT"},
             {"iss": "https://appleid.apple.com", "aud": "com.emergent.exploremobile.j9fjag",
@@ -106,7 +109,7 @@ class TestAppleSignInErrorPaths:
         assert r.json().get("detail") == "Missing kid in Apple token"
 
     def test_zzz_rate_limit_21st_call_returns_429(self):
-        """20/min per IP — fire 25 requests fast; 21st+ should be 429 with Retry-After."""
+        """20/min per IP â€” fire 25 requests fast; 21st+ should be 429 with Retry-After."""
         got_429 = False
         retry_after_seen = False
         garbage = "nope.nope.nope"
@@ -125,7 +128,7 @@ class TestAppleSignInErrorPaths:
 
 
 # ---------------------------------------------------------------------------
-# 2) 'aud' claim rejection — signed RS256 JWT with mocked JWKS
+# 2) 'aud' claim rejection â€” signed RS256 JWT with mocked JWKS
 # ---------------------------------------------------------------------------
 class TestAppleSignInAudienceCheck:
     """Exercised in-process via TestClient with mocked JWKS + a real RSA key."""
@@ -135,7 +138,7 @@ class TestAppleSignInAudienceCheck:
         # Import a live copy of server.py so we can patch its module globals
         import importlib.util
         spec = importlib.util.spec_from_file_location(
-            "explore91_server_apple", "/app/backend/server.py"
+            "explore91_server_apple", _SERVER_PY
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)  # runs on module import
@@ -181,7 +184,7 @@ class TestAppleSignInAudienceCheck:
         if r.status_code == 429:
             pytest.skip("shared IP bucket exhausted; aud check is exercised in the code path")
         assert r.status_code == 401, r.text
-        # Pyjwt raises InvalidAudienceError → mapped to detail 'Invalid audience'
+        # Pyjwt raises InvalidAudienceError â†’ mapped to detail 'Invalid audience'
         assert r.json().get("detail") in ("Invalid audience", "Invalid Apple identity token")
 
 
@@ -259,11 +262,11 @@ class TestAppleSignInHappyPath:
     @pytest.fixture(scope="class")
     def app_client(self):
         """Load a fresh server module and keep ONE TestClient alive for all
-        tests in this class — motor's AsyncIOMotorClient binds to the first
+        tests in this class â€” motor's AsyncIOMotorClient binds to the first
         event loop it sees, so we can't create a new TestClient per test."""
         import importlib.util
         spec = importlib.util.spec_from_file_location(
-            "explore91_server_apple_hp", "/app/backend/server.py"
+            "explore91_server_apple_hp", _SERVER_PY
         )
         m = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(m)

@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator } from "react-native";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
 
 export function PageHeader({
@@ -13,11 +14,11 @@ export function PageHeader({
 }) {
   return (
     <View style={styles.header}>
-      <View style={{ flex: 1 }}>
+      <View style={styles.headerTitles}>
         <Text style={styles.title}>{title}</Text>
         {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
       </View>
-      {right}
+      {right ? <View style={styles.headerRight}>{right}</View> : null}
     </View>
   );
 }
@@ -60,6 +61,7 @@ export function Btn({
   testID,
   disabled,
   small,
+  busy,
 }: {
   label: string;
   onPress?: () => void;
@@ -68,6 +70,7 @@ export function Btn({
   testID?: string;
   disabled?: boolean;
   small?: boolean;
+  busy?: boolean;
 }) {
   const bg = {
     primary: colors.brandPrimary,
@@ -76,19 +79,113 @@ export function Btn({
     success: colors.success,
   }[tone];
   const fg = tone === "secondary" ? colors.onSurface : "#FFF";
+  const blocked = disabled || busy;
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
-      disabled={disabled}
+      disabled={blocked}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!blocked, busy: !!busy }}
       style={[
         styles.btn,
-        { backgroundColor: bg, opacity: disabled ? 0.5 : 1, height: small ? 30 : 38 },
+        { backgroundColor: bg, opacity: blocked ? 0.5 : 1, height: small ? 30 : 38 },
       ]}
     >
-      {icon}
+      {busy ? <ActivityIndicator size="small" color={fg} /> : icon}
       <Text style={[styles.btnLabel, { color: fg, fontSize: small ? tType.sm : tType.base }]}>{label}</Text>
     </Pressable>
+  );
+}
+
+export function SearchInput({
+  value,
+  onChangeText,
+  placeholder = "Search",
+  width = 260,
+  testID,
+}: {
+  value: string;
+  onChangeText: (s: string) => void;
+  placeholder?: string;
+  width?: number;
+  testID?: string;
+}) {
+  return (
+    <View style={[styles.searchWrap, { width }]}>
+      <Ionicons name="search" size={15} color={colors.onSurfaceTertiary} />
+      <TextInput
+        testID={testID}
+        placeholder={placeholder}
+        placeholderTextColor={colors.onSurfaceTertiary}
+        value={value}
+        onChangeText={onChangeText}
+        style={styles.searchInput}
+      />
+      {value ? (
+        <Pressable onPress={() => onChangeText("")} hitSlop={8} accessibilityLabel="Clear search">
+          <Ionicons name="close-circle" size={15} color={colors.onSurfaceTertiary} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+/** Honest row count — never let a truncated page look like the whole dataset. */
+export function ResultCount({ shown, total }: { shown: number; total: number }) {
+  if (total === 0) return null;
+  return (
+    <Text style={styles.count}>
+      {shown < total ? `Showing ${shown} of ${total.toLocaleString()}` : `${total.toLocaleString()} total`}
+    </Text>
+  );
+}
+
+export function Pagination({
+  offset,
+  limit,
+  total,
+  onChange,
+}: {
+  offset: number;
+  limit: number;
+  total: number;
+  onChange: (nextOffset: number) => void;
+}) {
+  if (total <= limit) return null;
+  const page = Math.floor(offset / limit) + 1;
+  const pages = Math.ceil(total / limit);
+  return (
+    <View style={styles.pager}>
+      <Btn
+        testID="page-prev"
+        small
+        tone="secondary"
+        label="Previous"
+        disabled={offset === 0}
+        onPress={() => onChange(Math.max(0, offset - limit))}
+      />
+      <Text style={styles.pagerText}>Page {page} of {pages}</Text>
+      <Btn
+        testID="page-next"
+        small
+        tone="secondary"
+        label="Next"
+        disabled={page >= pages}
+        onPress={() => onChange(offset + limit)}
+      />
+    </View>
+  );
+}
+
+/** Distinguishes "still loading" from "loaded and genuinely empty". */
+export function Loading({ label = "Loading…" }: { label?: string }) {
+  return (
+    <View style={styles.loading}>
+      <ActivityIndicator color={colors.brandPrimary} />
+      <Text style={styles.loadingText}>{label}</Text>
+    </View>
   );
 }
 
@@ -125,7 +222,17 @@ export function Empty({ label = "Nothing here yet." }: { label?: string }) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", marginBottom: 24, gap: spacing.md },
+  // Wraps instead of crushing the title when the controls are wide / window is narrow.
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    marginBottom: 24,
+    gap: spacing.md,
+  },
+  headerTitles: { flexGrow: 1, flexShrink: 1, minWidth: 220 },
+  headerRight: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12 },
   title: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 4 },
 
@@ -187,4 +294,36 @@ const styles = StyleSheet.create({
   },
   tCell: { fontSize: tType.sm, color: colors.onSurface },
   empty: { fontSize: tType.base, color: colors.onSurfaceTertiary, padding: 24, textAlign: "center" },
+
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 40,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 14,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.onSurface,
+    fontSize: tType.base,
+    outlineStyle: "none",
+  } as any,
+
+  count: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginBottom: 8 },
+
+  pager: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 12,
+    marginTop: 16,
+  },
+  pagerText: { fontSize: tType.sm, color: colors.onSurfaceTertiary, fontWeight: "600" },
+
+  loading: { flexDirection: "row", alignItems: "center", gap: 10, padding: 24 },
+  loadingText: { fontSize: tType.base, color: colors.onSurfaceTertiary },
 });

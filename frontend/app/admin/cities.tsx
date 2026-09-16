@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, StyleSheet, TextInput } from "react-native";
 import { Image } from "expo-image";
 import { api } from "@/src/api";
 import { colors, spacing, type as tType } from "@/src/theme";
-import { PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty, Card } from "@/src/components/admin/ui";
+import { PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty, Card, Loading } from "@/src/components/admin/ui";
+import { useAsyncAction } from "@/src/components/admin/feedback";
 
 type City = { slug: string; name: string; tagline: string; image: string; source?: string };
 
@@ -14,41 +15,42 @@ export default function CitiesAdmin() {
   const [name, setName] = useState("");
   const [tagline, setTagline] = useState("");
   const [image, setImage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const { run, isBusy } = useAsyncAction();
 
   const load = useCallback(async () => {
-    try {
-      const list = await api<City[]>("/admin/cities", { auth: true });
-      setItems(list);
-    } catch (e) { console.log(e); }
-    finally { setLoading(false); }
+    setItems(await api<City[]>("/admin/cities", { auth: true }));
   }, []);
-  useEffect(() => { load(); }, [load]);
 
-  const add = async () => {
-    setErr(null);
-    if (!/^[a-z0-9-]{2,32}$/.test(slug)) return setErr("Slug must be lowercase letters/numbers/hyphens, 2-32 chars.");
-    if (!name.trim() || !tagline.trim()) return setErr("Name and tagline are required.");
-    if (!/^https:\/\//.test(image)) return setErr("Image must be an https:// URL.");
-    setBusy(true);
-    try {
-      await api("/admin/cities", { method: "POST", auth: true, body: JSON.stringify({ slug, name, tagline, image }) });
-      setSlug(""); setName(""); setTagline(""); setImage("");
-      await load();
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to create city");
-    } finally { setBusy(false); }
-  };
+  useEffect(() => {
+    run("load", load).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const del = async (s: string) => {
-    if (typeof window !== "undefined" && !window.confirm(`Remove custom city '${s}'? (Built-ins can't be removed.)`)) return;
-    try {
+  const add = () =>
+    run(
+      "add",
+      async () => {
+        if (!/^[a-z0-9-]{2,32}$/.test(slug)) {
+          throw new Error("Slug must be lowercase letters, numbers or hyphens (2–32 chars).");
+        }
+        if (!name.trim() || !tagline.trim()) throw new Error("Name and tagline are both required.");
+        if (!/^https:\/\//.test(image)) throw new Error("Image must be an https:// URL.");
+        await api("/admin/cities", { method: "POST", auth: true, body: JSON.stringify({ slug, name, tagline, image }) });
+        setSlug(""); setName(""); setTagline(""); setImage("");
+        await load();
+      },
+      "City launched — it's live in the app now."
+    );
+
+  const del = (s: string) => {
+    if (typeof window !== "undefined" &&
+        !window.confirm(`Remove custom city "${s}"?\n\nBusinesses already listed there will keep the city tag.`)) {
+      return;
+    }
+    run(s, async () => {
       await api(`/admin/cities/${s}`, { method: "DELETE", auth: true });
       await load();
-    } catch (e: any) {
-      if (typeof window !== "undefined") window.alert(e?.message ?? "Cannot delete");
-    }
+    }, "City removed.");
   };
 
   return (
@@ -65,13 +67,12 @@ export default function CitiesAdmin() {
         <TextInput placeholder="Tagline (e.g. Silicon Valley of India)" placeholderTextColor={colors.onSurfaceTertiary} value={tagline} onChangeText={setTagline} style={[styles.input, { marginTop: 12 }]} />
         <TextInput placeholder="Hero image URL (https://…)" placeholderTextColor={colors.onSurfaceTertiary} value={image} onChangeText={setImage} style={[styles.input, { marginTop: 12 }]} />
         <View style={{ marginTop: 12, alignItems: "flex-start" }}>
-          <Btn testID="city-add" label={busy ? "Launching…" : "Launch city"} onPress={add} disabled={busy} />
+          <Btn testID="city-add" label="Launch city" busy={isBusy("add")} onPress={add} />
         </View>
-        {err ? <Text style={styles.err}>{err}</Text> : null}
       </Card>
 
       {loading ? (
-        <ActivityIndicator color={colors.brandPrimary} />
+        <Loading label="Loading cities…" />
       ) : (
         <Table>
           <TableHead cols={[{ label: "City", width: 3 }, { label: "Slug", width: 1 }, { label: "Tagline", width: 3 }, { label: "Source", width: 1 }, { label: "Actions", width: 1 }]} />
@@ -88,7 +89,7 @@ export default function CitiesAdmin() {
               <Cell width={1}><Pill label={c.source === "cms" ? "Custom" : "Built-in"} tone={c.source === "cms" ? "brand" : "neutral"} /></Cell>
               <Cell width={1}>
                 {c.source === "cms" ? (
-                  <Btn testID={`del-city-${c.slug}`} small tone="danger" label="Remove" onPress={() => del(c.slug)} />
+                  <Btn testID={`del-city-${c.slug}`} small tone="danger" label="Remove" busy={isBusy(c.slug)} onPress={() => del(c.slug)} />
                 ) : (
                   <Text style={styles.readonly}>Read-only</Text>
                 )}

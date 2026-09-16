@@ -20,7 +20,7 @@ export async function loadToken(): Promise<string | null> {
 
 export type FetchOptions = RequestInit & { auth?: boolean };
 
-export async function api<T = any>(path: string, opts: FetchOptions = {}): Promise<T> {
+async function request(path: string, opts: FetchOptions = {}): Promise<Response> {
   const url = `${BASE}/api${path}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -41,8 +41,27 @@ export async function api<T = any>(path: string, opts: FetchOptions = {}): Promi
     err.status = res.status;
     throw err;
   }
+  return res;
+}
+
+export async function api<T = any>(path: string, opts: FetchOptions = {}): Promise<T> {
+  const res = await request(path, opts);
   if (res.status === 204) return undefined as any;
   return res.json();
+}
+
+export type Paged<T> = { rows: T[]; total: number };
+
+/** List endpoints return rows in the body and the unfiltered total in a header,
+ *  so the UI can say "showing 50 of 1,284" instead of silently truncating. */
+export async function apiPaged<T = any>(
+  path: string,
+  opts: FetchOptions = {}
+): Promise<Paged<T>> {
+  const res = await request(path, opts);
+  const rows = (await res.json()) as T[];
+  const header = res.headers.get("X-Total-Count");
+  return { rows, total: header ? parseInt(header, 10) : rows.length };
 }
 
 // Typed helpers -----------------------------------------------------------
@@ -91,6 +110,8 @@ export type Booking = {
   service_name?: string | null;
   status: string;
   notes?: string;
+  amount_inr: number;
+  amount_source: "service" | "estimate";
   created_at: string;
 };
 

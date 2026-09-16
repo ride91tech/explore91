@@ -12,6 +12,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuth } from "@/src/auth";
 import { AdminSignIn } from "@/src/components/admin/AdminSignIn";
+import { ToastHost } from "@/src/components/admin/feedback";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
 
 const NAV = [
@@ -25,6 +26,7 @@ const NAV = [
   { key: "reports", label: "Reports", icon: "stats-chart-outline" as const, href: "/admin/reports" },
   { key: "tickets", label: "Support", icon: "chatbubbles-outline" as const, href: "/admin/tickets" },
   { key: "flags", label: "Fraud flags", icon: "flag-outline" as const, href: "/admin/flags" },
+  { key: "audit", label: "Audit log", icon: "receipt-outline" as const, href: "/admin/audit" },
 ];
 
 export default function AdminLayout() {
@@ -55,6 +57,7 @@ export default function AdminLayout() {
   }
 
   return (
+    <ToastHost>
     <View style={styles.shell}>
       {/* Sidebar */}
       <View style={styles.sidebar}>
@@ -109,6 +112,7 @@ export default function AdminLayout() {
         <Slot />
       </ScrollView>
     </View>
+    </ToastHost>
   );
 }
 

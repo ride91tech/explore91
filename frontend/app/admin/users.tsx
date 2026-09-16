@@ -1,121 +1,160 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import { api, UserT } from "@/src/api";
+import { useRouter } from "expo-router";
+import { apiPaged, api, UserT } from "@/src/api";
 import { colors, spacing, type as tType } from "@/src/theme";
-import { PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty } from "@/src/components/admin/ui";
+import {
+  PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty,
+  SearchInput, Pagination, ResultCount, Loading,
+} from "@/src/components/admin/ui";
+import { useAsyncAction } from "@/src/components/admin/feedback";
 
 type UserRow = UserT & { is_blocked?: boolean };
 
+const PAGE = 25;
+
 export default function Users() {
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const router = useRouter();
+  const [rows, setRows] = useState<UserRow[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [offset, setOffset] = useState(0);
+  const { run, isBusy } = useAsyncAction();
 
   const load = useCallback(async () => {
-    try {
-      const list = await api<UserRow[]>("/admin/users", { auth: true });
-      setUsers(list);
-    } catch (e) { console.log(e); }
-    finally { setLoading(false); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
+    const params = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
+    if (q.trim()) params.append("q", q.trim());
+    const res = await apiPaged<UserRow>(`/admin/users?${params}`, { auth: true });
+    setRows(res.rows);
+    setTotal(res.total);
+  }, [q, offset]);
 
-  const filtered = q
-    ? users.filter((u) => (u.name + " " + u.email).toLowerCase().includes(q.toLowerCase()))
-    : users;
+  // Debounced so typing doesn't fire a request per keystroke.
+  useEffect(() => {
+    setLoading(true);
+    const t = setTimeout(() => {
+      run("load", load).finally(() => setLoading(false));
+    }, q ? 300 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
 
-  const toggleBlock = async (id: string) => {
-    try {
-      await api(`/admin/users/${id}/block`, { method: "PATCH", auth: true });
-      await load();
-    } catch (e) { console.log(e); }
+  useEffect(() => { setOffset(0); }, [q]);
+
+  const toggleBlock = (u: UserRow) => {
+    const blocking = !u.is_blocked;
+    if (blocking && typeof window !== "undefined" &&
+        !window.confirm(`Block ${u.email}?\n\nThey will be signed out of every device immediately and cannot use the app until unblocked.`)) {
+      return;
+    }
+    run(
+      u.user_id,
+      async () => {
+        await api(`/admin/users/${u.user_id}/block`, { method: "PATCH", auth: true });
+        await load();
+      },
+      blocking ? `${u.email} blocked and signed out.` : `${u.email} unblocked.`
+    );
   };
+
+  const flag = (u: UserRow) =>
+    router.push(`/admin/flags?entity_type=user&entity_id=${u.user_id}` as any);
 
   return (
     <View>
       <PageHeader
         title="Users"
-        subtitle={`${users.length} total accounts`}
+        subtitle="Search every account, block abuse, escalate to a fraud flag."
         right={
-          <TextInput
-            placeholder="Search name or email"
-            placeholderTextColor={colors.onSurfaceTertiary}
+          <SearchInput
+            testID="users-search"
             value={q}
             onChangeText={setQ}
-            style={styles.search}
+            placeholder="Search name or email…"
+            width={280}
           />
         }
       />
 
       {loading ? (
-        <ActivityIndicator color={colors.brandPrimary} />
+        <Loading label="Loading users…" />
       ) : (
-        <Table>
-          <TableHead
-            cols={[
-              { label: "User", width: 3 },
-              { label: "Roles", width: 2 },
-              { label: "Wallet", width: 1 },
-              { label: "Status", width: 1 },
-              { label: "Actions", width: 1.5 },
-            ]}
-          />
-          {filtered.length === 0 ? (
-            <Empty label="No matching users." />
-          ) : (
-            filtered.map((u) => (
-              <TableRow key={u.user_id}>
-                <Cell width={3}>
-                  <View style={styles.userCell}>
-                    <View style={styles.avatar}>
-                      {u.picture ? (
-                        <Image source={{ uri: u.picture }} style={{ width: 36, height: 36, borderRadius: 18 }} />
-                      ) : (
-                        <Text style={styles.avatarText}>{u.name[0]?.toUpperCase()}</Text>
-                      )}
+        <>
+          <ResultCount shown={rows.length} total={total} />
+          <Table>
+            <TableHead
+              cols={[
+                { label: "User", width: 3 },
+                { label: "Roles", width: 2 },
+                { label: "Wallet", width: 1 },
+                { label: "Status", width: 1 },
+                { label: "Actions", width: 2 },
+              ]}
+            />
+            {rows.length === 0 ? (
+              <Empty label={q ? `No users match "${q}".` : "No accounts yet."} />
+            ) : (
+              rows.map((u) => (
+                <TableRow key={u.user_id}>
+                  <Cell width={3}>
+                    <View style={styles.userCell}>
+                      <View style={styles.avatar}>
+                        {u.picture ? (
+                          <Image source={{ uri: u.picture }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+                        ) : (
+                          <Text style={styles.avatarText}>{u.name?.[0]?.toUpperCase() ?? "?"}</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.userName} numberOfLines={1}>{u.name}</Text>
+                        <Text style={styles.userEmail} numberOfLines={1}>{u.email}</Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.userName} numberOfLines={1}>{u.name}</Text>
-                      <Text style={styles.userEmail} numberOfLines={1}>{u.email}</Text>
+                  </Cell>
+                  <Cell width={2}>
+                    <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap" }}>
+                      {(u.roles ?? ["customer"]).map((r) => (
+                        <Pill key={r} label={r} tone={r === "admin" ? "brand" : r === "owner" ? "ok" : "neutral"} />
+                      ))}
                     </View>
-                  </View>
-                </Cell>
-                <Cell width={2}>
-                  <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap" }}>
-                    {(u.roles ?? ["customer"]).map((r) => (
-                      <Pill key={r} label={r} tone={r === "admin" ? "brand" : r === "owner" ? "ok" : "neutral"} />
-                    ))}
-                  </View>
-                </Cell>
-                <Cell width={1}>{`${u.wallet_points ?? 0} pts`}</Cell>
-                <Cell width={1}>
-                  <Pill label={u.is_blocked ? "Blocked" : "Active"} tone={u.is_blocked ? "err" : "ok"} />
-                </Cell>
-                <Cell width={1.5}>
-                  <Btn
-                    testID={`block-${u.user_id}`}
-                    small
-                    tone={u.is_blocked ? "success" : "danger"}
-                    label={u.is_blocked ? "Unblock" : "Block"}
-                    onPress={() => toggleBlock(u.user_id)}
-                  />
-                </Cell>
-              </TableRow>
-            ))
-          )}
-        </Table>
+                  </Cell>
+                  <Cell width={1}>{`${u.wallet_points ?? 0} pts`}</Cell>
+                  <Cell width={1}>
+                    <Pill label={u.is_blocked ? "Blocked" : "Active"} tone={u.is_blocked ? "err" : "ok"} />
+                  </Cell>
+                  <Cell width={2}>
+                    <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+                      <Btn
+                        testID={`block-${u.user_id}`}
+                        small
+                        tone={u.is_blocked ? "success" : "danger"}
+                        label={u.is_blocked ? "Unblock" : "Block"}
+                        busy={isBusy(u.user_id)}
+                        onPress={() => toggleBlock(u)}
+                      />
+                      <Btn
+                        testID={`flag-${u.user_id}`}
+                        small
+                        tone="secondary"
+                        label="Flag"
+                        onPress={() => flag(u)}
+                      />
+                    </View>
+                  </Cell>
+                </TableRow>
+              ))
+            )}
+          </Table>
+          <Pagination offset={offset} limit={PAGE} total={total} onChange={setOffset} />
+        </>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  search: {
-    width: 280, height: 40, borderRadius: 999, borderWidth: 1,
-    borderColor: colors.border, backgroundColor: colors.surface,
-    paddingHorizontal: 16, color: colors.onSurface, fontSize: tType.base,
-  },
   userCell: { flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   avatarText: { color: "#FFF", fontWeight: "700" },

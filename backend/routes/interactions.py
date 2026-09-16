@@ -1,6 +1,7 @@
 """Customer-side interactions: saved listings, bookings, reviews."""
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -55,11 +56,32 @@ async def toggle_saved(payload: SavedToggle, current=Depends(get_current_user)):
 
 
 # --- Bookings -------------------------------------------------------------
+# Fallback per-head spend when a booking has no priced line item (e.g. a plain
+# table reservation). Keyed by the business's price_range band.
+_PRICE_BAND_INR = {"$": 400, "$$": 1200, "$$$": 2500, "$$$$": 4500}
+
+
+def booking_amount(biz: dict, service_name: Optional[str], guests: int) -> tuple[int, str]:
+    """Return (amount_inr, source) for a booking.
+
+    Prefers the real price of the selected service/menu item; falls back to a
+    band estimate. The source is stored so reports can separate the two rather
+    than presenting an estimate as booked revenue.
+    """
+    if service_name:
+        for item in list(biz.get("services") or []) + list(biz.get("menu") or []):
+            if item.get("name") == service_name and isinstance(item.get("price"), (int, float)):
+                return int(item["price"]) * max(1, guests), "service"
+    band = _PRICE_BAND_INR.get(biz.get("price_range") or "$$", 1200)
+    return band * max(1, guests), "estimate"
+
+
 @router.post("/bookings", response_model=Booking)
 async def create_booking(payload: BookingCreate, current=Depends(get_current_user)):
     biz = await db.businesses.find_one({"business_id": payload.business_id}, {"_id": 0})
     if not biz:
         raise HTTPException(status_code=404, detail="Business not found")
+    amount, amount_source = booking_amount(biz, payload.service_name, payload.guests)
     booking = {
         "booking_id": f"bk_{uuid.uuid4().hex[:12]}",
         "user_id": current["user_id"],
@@ -72,6 +94,8 @@ async def create_booking(payload: BookingCreate, current=Depends(get_current_use
         "service_name": payload.service_name,
         "status": "confirmed",
         "notes": payload.notes or "",
+        "amount_inr": amount,
+        "amount_source": amount_source,
         "created_at": datetime.now(timezone.utc),
     }
     await db.bookings.insert_one(dict(booking))

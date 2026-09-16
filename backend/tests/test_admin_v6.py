@@ -20,8 +20,10 @@ import requests
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
-load_dotenv("/app/frontend/.env")
-load_dotenv("/app/backend/.env")
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REPO_DIR = os.path.dirname(_BACKEND_DIR)
+load_dotenv(os.path.join(_REPO_DIR, "frontend", ".env"))
+load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
 BASE_URL = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/")
 MONGO_URL = os.environ["MONGO_URL"]

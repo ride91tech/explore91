@@ -47,4 +47,6 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    # Pagination totals are unreadable from JS without this.
+    expose_headers=["X-Total-Count"],
 )
