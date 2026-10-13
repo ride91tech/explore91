@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { api, Business } from "@/src/api";
+import { useToast } from "@/src/components/Toast";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
 
 const TIMES = ["12:30", "13:00", "13:30", "19:00", "19:30", "20:00", "20:30", "21:00"];
@@ -24,6 +25,7 @@ export default function BookScreen() {
   const { id, service } = useLocalSearchParams<{ id: string; service?: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { show } = useToast();
   const [biz, setBiz] = useState<Business | null>(null);
   const [step, setStep] = useState<0 | 1>(0);
   const [date, setDate] = useState<Date>(() => {
@@ -52,12 +54,15 @@ export default function BookScreen() {
     return arr;
   }, []);
 
-  const fmtDate = (d: Date) => d.toISOString().split("T")[0];
+  // Local calendar date, not UTC. toISOString() shifts the day backwards for
+  // anyone east of UTC (IST is +5:30), so a booking made after midnight would
+  // be saved against the previous day.
+  const fmtDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
   const submit = async () => {
-    if (!biz) return;
+    if (!biz || submitting) return;
     setSubmitting(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try {
       const r = await api<{ booking_id: string }>("/bookings", {
         method: "POST", auth: true,
@@ -70,9 +75,16 @@ export default function BookScreen() {
           service_name: service ?? null,
         }),
       });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setConfirmed({ id: r.booking_id });
     } catch (e: any) {
-      console.log("booking failed", e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      show(
+        e?.status === 401
+          ? "Your session expired. Sign in and try again."
+          : e?.message || "We couldn't complete that booking. Please try again.",
+        "error"
+      );
     } finally {
       setSubmitting(false);
     }

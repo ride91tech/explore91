@@ -10,6 +10,7 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  Share,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,6 +19,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { api, Business } from "@/src/api";
+import { useToast } from "@/src/components/Toast";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
 
 type ReviewT = {
@@ -32,6 +34,7 @@ export default function BusinessDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { show } = useToast();
   const [biz, setBiz] = useState<Business | null>(null);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,7 +52,7 @@ export default function BusinessDetail() {
   }, [id]);
 
   const submitReview = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || postingReview) return;
     setPostingReview(true);
     try {
       await api("/reviews", {
@@ -59,9 +62,27 @@ export default function BusinessDetail() {
       setNewComment("");
       setNewRating(5);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      show("Thanks — your review is live.", "success");
       await loadReviews();
-    } catch (e) { console.log("post review", e); }
-    finally { setPostingReview(false); }
+    } catch (e: any) {
+      show(
+        e?.status === 401 ? "Sign in to leave a review."
+          : e?.status === 429 ? "You're posting too quickly. Try again in a minute."
+          : e?.message || "Couldn't post that review. Please try again.",
+        "error"
+      );
+    } finally { setPostingReview(false); }
+  };
+
+  const share = async () => {
+    if (!biz) return;
+    try {
+      await Share.share({
+        message: `${biz.name} — ${biz.address}\nFound on Explore91`,
+      });
+    } catch {
+      show("Couldn't open sharing. Try again.", "error");
+    }
   };
 
   const load = useCallback(async () => {
@@ -83,13 +104,18 @@ export default function BusinessDetail() {
 
   const toggleSave = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const previous = saved;
+    setSaved(!previous); // optimistic
     try {
       const r = await api<{ saved: boolean }>(`/saved/toggle`, {
         method: "POST", auth: true,
         body: JSON.stringify({ business_id: id }),
       });
       setSaved(r.saved);
-    } catch (e) { console.log(e); }
+    } catch (e: any) {
+      setSaved(previous);
+      show(e?.status === 401 ? "Sign in to save places." : "Couldn't save that. Please try again.", "error");
+    }
   };
 
   if (loading || !biz) {
@@ -132,7 +158,7 @@ export default function BusinessDetail() {
               <Pressable testID="save-btn" style={styles.iconBtn} onPress={toggleSave}>
                 <Ionicons name={saved ? "heart" : "heart-outline"} size={20} color={saved ? colors.brandTertiary : "#FFF"} />
               </Pressable>
-              <Pressable style={styles.iconBtn} onPress={() => {}}>
+              <Pressable testID="share-btn" style={styles.iconBtn} onPress={share}>
                 <Ionicons name="share-outline" size={20} color="#FFF" />
               </Pressable>
             </View>

@@ -39,7 +39,10 @@ export default function Profile() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const upcoming = bookings.filter((b) => b.status === "confirmed");
+  // Date-aware: a confirmed booking stops being "upcoming" once its day has passed.
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const upcoming = bookings.filter((b) => b.status === "confirmed" && b.date >= todayStr);
 
   return (
     <ScrollView
@@ -112,9 +115,8 @@ export default function Profile() {
         <View style={styles.rowGroup}>
           <SettingRow icon="location-outline" label="Change city" hint={user?.home_city ?? "Goa"} onPress={() => router.push("/city")} testID="settings-city" />
           <SettingRow icon="heart-outline" label="Saved places" onPress={() => router.push("/(tabs)/saved")} testID="settings-saved" />
-          <SettingRow icon="calendar-outline" label="All bookings" hint={`${bookings.length}`} onPress={() => {}} testID="settings-bookings" />
-          <SettingRow icon="notifications-outline" label="Notifications" onPress={() => {}} testID="settings-notifs" />
-          <SettingRow icon="help-circle-outline" label="Help & Support" onPress={() => {}} testID="settings-help" />
+          <SettingRow icon="calendar-outline" label="All bookings" hint={`${bookings.length}`} onPress={() => router.push("/bookings" as any)} testID="settings-bookings" />
+          <SettingRow icon="help-circle-outline" label="Help & Support" onPress={() => router.push("/support" as any)} testID="settings-help" />
         </View>
 
         <Text style={[styles.section, { marginTop: spacing.xl }]}>For business & platform</Text>

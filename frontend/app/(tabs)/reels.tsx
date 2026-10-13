@@ -8,6 +8,7 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  Share,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,6 +19,7 @@ import * as Haptics from "expo-haptics";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { api, ReelT } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { useToast } from "@/src/components/Toast";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
 
 const TAB_BAR = 82;
@@ -26,6 +28,7 @@ export default function ReelsFeed() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { show } = useToast();
   const { height, width } = Dimensions.get("window");
   const itemH = height - TAB_BAR;
 
@@ -67,6 +70,17 @@ export default function ReelsFeed() {
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
 
+  const shareReel = useCallback(async (reel: ReelT) => {
+    const where = reel.business_name ? ` at ${reel.business_name}` : "";
+    try {
+      await Share.share({
+        message: `${reel.caption}${where} — on Explore91`,
+      });
+    } catch {
+      show("Couldn't open sharing. Try again.", "error");
+    }
+  }, [show]);
+
   const toggleLike = useCallback(async (reelId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Optimistic
@@ -87,8 +101,19 @@ export default function ReelsFeed() {
         return next;
       });
       setReels((prev) => prev.map((r) => r.reel_id === reelId ? { ...r, likes: res.likes } : r));
-    } catch (e) { console.log(e); }
-  }, [likedIds]);
+    } catch (e: any) {
+      // Roll the optimistic update back so the heart matches the server.
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(reelId)) next.delete(reelId); else next.add(reelId);
+        return next;
+      });
+      setReels((prev) => prev.map((r) => r.reel_id === reelId
+        ? { ...r, likes: r.likes + (likedIds.has(reelId) ? 1 : -1) }
+        : r));
+      show(e?.status === 401 ? "Sign in to like reels." : "Couldn't save that like.", "error");
+    }
+  }, [likedIds, show]);
 
   if (loading) {
     return (
@@ -130,6 +155,7 @@ export default function ReelsFeed() {
             liked={likedIds.has(item.reel_id)}
             onLike={() => toggleLike(item.reel_id)}
             onOpenBusiness={() => item.business_id && router.push(`/business/${item.business_id}`)}
+            onShare={() => shareReel(item)}
             height={itemH}
             width={width}
             insets={insets}
@@ -151,6 +177,7 @@ function ReelItem({
   liked,
   onLike,
   onOpenBusiness,
+  onShare,
   height,
   width,
   insets,
@@ -160,6 +187,7 @@ function ReelItem({
   liked: boolean;
   onLike: () => void;
   onOpenBusiness: () => void;
+  onShare: () => void;
   height: number;
   width: number;
   insets: { top: number; bottom: number };
@@ -228,16 +256,10 @@ function ReelItem({
           onPress={onLike}
         />
         <ReelAction
-          testID={`reel-comment-${reel.reel_id}`}
-          icon="chatbubble-outline"
-          label={Math.max(1, Math.round(reel.likes / 12)).toString()}
-          onPress={() => {}}
-        />
-        <ReelAction
           testID={`reel-share-${reel.reel_id}`}
           icon="paper-plane-outline"
           label="Share"
-          onPress={() => {}}
+          onPress={onShare}
         />
       </View>
 

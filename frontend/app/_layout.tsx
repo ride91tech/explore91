@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider, useAuth } from "@/src/auth";
+import { ToastHost } from "@/src/components/Toast";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -44,6 +45,8 @@ function AuthGate() {
       <Stack.Screen name="ai/itinerary" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
       <Stack.Screen name="owner" options={{ headerShown: false }} />
       <Stack.Screen name="admin" options={{ headerShown: false }} />
+      <Stack.Screen name="support" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+      <Stack.Screen name="bookings" options={{ animation: "slide_from_right" }} />
     </Stack>
   );
 }
@@ -61,8 +64,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="dark" />
-          <AuthGate />
+          <ToastHost>
+            <StatusBar style="dark" />
+            <AuthGate />
+          </ToastHost>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
