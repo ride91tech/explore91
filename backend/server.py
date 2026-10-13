@@ -6,6 +6,7 @@ from fastapi import APIRouter, FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from core import db as core_db
+from core.config import ALLOWED_ORIGINS
 from routes import admin, ai, auth, catalog, interactions, portal, reels, tickets
 from seed.seed import ensure_indexes, seed_data
 
@@ -43,10 +44,17 @@ app.include_router(api)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
+    # allow_credentials with "*" is rejected by browsers anyway; auth here is a
+    # bearer token, not a cookie, so credentials aren't needed.
+    allow_credentials=ALLOWED_ORIGINS != ["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
     # Pagination totals are unreadable from JS without this.
     expose_headers=["X-Total-Count"],
 )
+
+if ALLOWED_ORIGINS == ["*"]:
+    logging.getLogger("explore91").warning(
+        "CORS is open to all origins. Set ALLOWED_ORIGINS before exposing this publicly."
+    )

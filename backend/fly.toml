@@ -1,0 +1,45 @@
+# Explore91 API — Fly.io, Mumbai.
+#
+# The database must live in the same region as this app. Atlas offers Mumbai
+# (ap-south-1) on every tier including the free one; putting it anywhere else
+# makes each query pay a cross-region round trip.
+#
+# First deploy:
+#   fly launch --no-deploy --copy-config --name explore91-api --region bom
+#   fly secrets set MONGO_URL="mongodb+srv://..." DB_NAME="explore91" \
+#                   ADMIN_EMAILS="you@example.com" ALLOWED_ORIGINS="https://your-admin-host"
+#   fly deploy
+
+app = "explore91-api"
+primary_region = "bom"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  DB_NAME = "explore91"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  # Keep one machine warm. A cold start on a reels feed reads as a broken app.
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+[[http_service.checks]]
+  grace_period = "20s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/api/"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

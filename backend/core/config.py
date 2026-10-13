@@ -26,3 +26,12 @@ ADMIN_EMAILS = {
     for e in (os.environ.get("ADMIN_EMAILS", "") or "").split(",")
     if e.strip()
 }
+
+# Browser origins allowed to call the API. Native apps don't send an Origin
+# header and are unaffected; this only governs the web admin console.
+# Unset means "*", which is fine locally but must be set on a public deploy.
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in (os.environ.get("ALLOWED_ORIGINS", "") or "").split(",")
+    if o.strip()
+] or ["*"]
