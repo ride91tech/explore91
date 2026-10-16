@@ -100,28 +100,6 @@ export default function Discover() {
           <Text style={styles.searchText}>Search for restaurants, hotels, spas…</Text>
         </Pressable>
 
-        {/* AI concierge CTA */}
-        <Pressable
-          testID="ai-cta"
-          onPress={() => router.push("/ai")}
-          style={styles.aiCta}
-        >
-          <LinearGradient
-            colors={["#1A1A1A", "#3A3A3A"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.aiIcon}>
-            <Ionicons name="sparkles" size={18} color={colors.brandTertiary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.aiTitle}>Explore91 Concierge</Text>
-            <Text style={styles.aiSub}>AI picks & itineraries in {cityName}, curated for you.</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.85)" />
-        </Pressable>
-
         {/* Hero city card */}
         {heroCity ? (
           <Pressable
@@ -325,30 +303,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   searchText: { color: colors.onSurfaceTertiary, fontSize: tType.base },
-
-  aiCta: {
-    marginTop: spacing.md,
-    marginHorizontal: spacing.lg,
-    height: 68,
-    borderRadius: radius.lg,
-    overflow: "hidden",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-  },
-  aiIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(226,125,96,0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(226,125,96,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  aiTitle: { color: "#FFF", fontSize: tType.lg, fontWeight: "700" },
-  aiSub: { color: "rgba(255,255,255,0.7)", fontSize: tType.sm, marginTop: 2 },
 
   hero: {
     marginTop: spacing.lg,

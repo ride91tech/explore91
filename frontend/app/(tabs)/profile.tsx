@@ -128,12 +128,6 @@ export default function Profile() {
             onPress={() => router.push("/owner" as any)}
             testID="settings-owner"
           />
-          <SettingRow
-            icon="sparkles-outline"
-            label="AI Concierge"
-            onPress={() => router.push("/ai")}
-            testID="settings-ai"
-          />
         </View>
 
         <Pressable testID="logout-button" onPress={signOut} style={styles.logout}>
