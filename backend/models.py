@@ -114,6 +114,11 @@ class JourneyMark(BaseModel):
     city_slug: str = Field(pattern="^[a-z0-9-]{2,32}$")
 
 
+class PlaceInterestSet(BaseModel):
+    """Interested / Going / Visited — what sits where a booking button would."""
+    status: str = Field(pattern="^(interested|going|visited)$")
+
+
 class Review(BaseModel):
     review_id: str
     user_id: str

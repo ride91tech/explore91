@@ -10,7 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from core.db import db
 from core.security import get_current_user
 from models import JourneyMark
-from seed.data import CITIES, INDIA_STATE_COUNT
+from seed.data import (
+    CITIES,
+    INDIA_STATES,
+    INDIA_STATE_COUNT,
+    INDIA_UNION_TERRITORIES,
+    INDIA_UT_COUNT,
+)
 
 router = APIRouter()
 
@@ -38,14 +44,24 @@ async def get_journey(current=Depends(get_current_user)):
     # Only count visits to cities that still exist; a removed city shouldn't
     # inflate the total.
     live = [v for v in visits if v["city_slug"] in cities]
-    states = {_state_of(cities[v["city_slug"]]) for v in live}
-    states.discard("")
+    regions = {_state_of(cities[v["city_slug"]]) for v in live}
+    regions.discard("")
+
+    # States and union territories are counted apart. The percentage is over
+    # the 28 states, matching explore91.com, which means a UT-only trip reads
+    # as 0% -- so UT coverage is surfaced in its own right instead of being
+    # folded in and quietly distorting the figure.
+    states = regions & INDIA_STATES
+    territories = regions & INDIA_UNION_TERRITORIES
 
     return {
         "cities": len(live),
         "states": len(states),
-        "india_percent": round(len(states) / INDIA_STATE_COUNT * 100),
+        # Truncated, not rounded: one state of 28 reads as 3%, as on the site.
+        "india_percent": int(len(states) / INDIA_STATE_COUNT * 100),
         "states_total": INDIA_STATE_COUNT,
+        "union_territories": len(territories),
+        "union_territories_total": INDIA_UT_COUNT,
         "visited": [
             {
                 "city_slug": v["city_slug"],

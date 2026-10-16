@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import PlainTextResponse
 
 from core import audit
+from routes.catalog import content_counts, with_content
 from core.db import db
 from core.security import get_current_user, require_role
 from models import (
@@ -309,7 +310,10 @@ async def admin_list_cities(current=Depends(get_current_user)):
     known = {c["slug"] for c in custom}
     merged = [{**c, "source": "default"} for c in CITIES if c["slug"] not in known]
     merged += [{**c, "source": "cms"} for c in custom]
-    return merged
+    # Surface how much content each city holds. A city with none renders as
+    # "coming soon" in the app, and that is the thing an admin needs to see.
+    counts = await content_counts()
+    return [with_content(c, counts) for c in merged]
 
 
 @router.post("/admin/cities")

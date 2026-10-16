@@ -162,6 +162,26 @@ export default function Discover() {
           </ScrollView>
         </View>
 
+        {/* A city with no listings renders every section away and the screen
+            just trails off into blank space. Say what's going on and give a
+            way out instead. */}
+        {!loading && featured.length === 0 && trending.length === 0 && nearby.length === 0 && (
+          <View style={styles.emptyCity} testID="home-empty-city">
+            <Ionicons name="compass-outline" size={28} color={colors.onSurfaceTertiary} />
+            <Text style={styles.emptyCityTitle}>We're still curating {cityName}</Text>
+            <Text style={styles.emptyCitySub}>
+              Nothing is listed here yet. Pick another city to start exploring.
+            </Text>
+            <Pressable
+              testID="empty-city-switch"
+              onPress={() => router.push("/city")}
+              style={styles.emptyCityBtn}
+            >
+              <Text style={styles.emptyCityBtnText}>Choose another city</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Featured */}
         {featured.length > 0 && (
           <View style={{ marginTop: spacing.xl }}>
@@ -243,6 +263,27 @@ function SectionHeader({ title, subtitle, noPadding }: { title: string; subtitle
 }
 
 const styles = StyleSheet.create({
+  emptyCity: {
+    marginTop: spacing.xl,
+    marginHorizontal: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSecondary,
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  emptyCityTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface, textAlign: "center" },
+  emptyCitySub: { fontSize: tType.base, color: colors.onSurfaceSecondary, textAlign: "center" },
+  emptyCityBtn: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandTertiary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyCityBtnText: { color: "#FFF", fontWeight: "700", fontSize: tType.base },
   container: { flex: 1, backgroundColor: colors.surface },
   header: {
     flexDirection: "row",

@@ -178,6 +178,49 @@ class TestCitiesCMS:
         d = requests.delete(f"{BASE_URL}/api/admin/cities/{slug}", headers=admin_ctx["H"], timeout=15)
         assert d.status_code == 200
 
+    def test_list_reports_content_counts(self, admin_ctx):
+        """An admin needs to see which cities still have nothing in them."""
+        r = requests.get(f"{BASE_URL}/api/admin/cities", headers=admin_ctx["H"], timeout=20)
+        assert r.status_code == 200, r.text
+        cities = r.json()
+        assert cities
+        for c in cities:
+            assert isinstance(c["business_count"], int)
+            assert isinstance(c["reel_count"], int)
+            assert c["is_live"] == (c["business_count"] > 0), c["slug"]
+            # the existing source flag must survive the annotation
+            assert c["source"] in ("default", "cms")
+
+    def test_a_new_city_starts_not_live(self, admin_ctx):
+        """Freshly added cities have no listings, so the app holds them back as
+        "coming soon" rather than showing an empty city."""
+        slug = f"testcity-{uuid.uuid4().hex[:4]}"
+        payload = {
+            "slug": slug, "name": "Test City",
+            "state": "Test State",
+            "tagline": "For testing",
+            "image": "https://images.unsplash.com/photo-1.jpg",
+        }
+        assert requests.post(
+            f"{BASE_URL}/api/admin/cities", headers=admin_ctx["H"],
+            json=payload, timeout=15,
+        ).status_code == 200
+        try:
+            rows = requests.get(
+                f"{BASE_URL}/api/admin/cities", headers=admin_ctx["H"], timeout=20
+            ).json()
+            row = next(c for c in rows if c["slug"] == slug)
+            assert row["business_count"] == 0
+            assert row["is_live"] is False
+
+            groups = requests.get(f"{BASE_URL}/api/cities/grouped", timeout=20).json()
+            pub = next(c for g in groups for c in g["cities"] if c["slug"] == slug)
+            assert pub["is_live"] is False
+        finally:
+            requests.delete(
+                f"{BASE_URL}/api/admin/cities/{slug}", headers=admin_ctx["H"], timeout=15
+            )
+
     def test_invalid_https_image_422(self, admin_ctx):
         payload = {"slug": f"c-{uuid.uuid4().hex[:4]}", "name": "X",
                    "tagline": "y", "image": "http://insecure.jpg"}

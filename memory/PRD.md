@@ -6,8 +6,8 @@ The "Operating System for every city" — a premium mobile app to discover, book
 ## Tech
 - **Frontend**: Expo (React Native SDK 57, RN 0.86, React 19.2) + Expo Router, expo-image, expo-blur, expo-linear-gradient, expo-haptics, react-native-maps.
 - **Backend**: FastAPI + Motor (MongoDB). Prefix `/api`. Modular layout under `/app/backend/{core,models,routes,seed}` — `server.py` is a thin composer that mounts 8 domain routers (auth, catalog, interactions, portal, admin, ai, reels, tickets) via a FastAPI `lifespan` handler.
-- **Auth**: Emergent-managed Google OAuth (`auth.emergentagent.com`) → `POST /api/auth/session` → 7-day `session_token` stored in `expo-secure-store`.
-- **AI**: Claude Sonnet 4.6 via `emergentintegrations` (Emergent LLM key).
+- **Auth**: Google Sign-In and Apple Sign-In. The client obtains an ID token and posts it to `POST /api/auth/google` or `POST /api/auth/apple`; the backend verifies it against the provider's published JWKS (issuer, audience, expiry, signature) and returns a 7-day `session_token` stored in `expo-secure-store`. No third party sits in the login path.
+- **AI**: Claude, called directly over the Anthropic Messages API. Needs `ANTHROPIC_API_KEY`; without it the AI routes return 503.
 - **Storage**: MongoDB collections — `users`, `user_sessions`, `businesses`, `bookings`, `saved`, `reviews`, `staff`.
 
 ## Roles (v2)
@@ -54,8 +54,9 @@ The "Operating System for every city" — a premium mobile app to discover, book
 - `GET /api/businesses/{id}`
 - `GET /api/businesses/{id}/reviews`
 
-### Auth (Emergent OAuth)
-- `POST /api/auth/session` — exchange `session_id` → `session_token`
+### Auth
+- `POST /api/auth/google` — verify a Google ID token → `session_token`
+- `POST /api/auth/apple` — verify an Apple identity token → `session_token`
 - `GET  /api/auth/me`
 - `POST /api/auth/logout`
 - `PATCH /api/auth/me` — update `home_city`
@@ -90,7 +91,7 @@ The "Operating System for every city" — a premium mobile app to discover, book
 - Backend: **44/44 automated tests passing** (regression + 25 new endpoint checks including RBAC, ownership scoping, is_approved filter, AI recommend/itinerary with real Claude 4.6, review flow).
 
 ## Security TODOs before production
-- **Gate `POST /api/auth/roles`** — currently self-serve for demo. Move to invite-only or Emergent allowlist.
+- ~~**Gate `POST /api/auth/roles`**~~ — done. `admin` can only be self-granted by an address in `ADMIN_EMAILS`; anyone else gets 403.
 - Split `server.py` into modules (currently ~1075 lines).
 - Migrate from `@app.on_event` to FastAPI lifespan.
 - Tighten CORS (currently `*`).

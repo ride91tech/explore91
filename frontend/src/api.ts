@@ -116,7 +116,49 @@ export type Booking = {
 };
 
 export type CategoryT = { slug: string; name: string; icon: string };
-export type CityT = { slug: string; name: string; tagline: string; image: string };
+export type CityT = {
+  slug: string;
+  name: string;
+  tagline: string;
+  image: string;
+  state?: string;
+  region?: string;
+  /** Content counts and liveness come from /cities/grouped only, and are
+   *  absent until the backend carrying them is deployed. Treat an undefined
+   *  `is_live` as live, so the picker never hides cities against an older API. */
+  business_count?: number;
+  reel_count?: number;
+  is_live?: boolean;
+};
+
+export type CityGroupT = { region: string; cities: CityT[] };
+
+/** Journey coverage. States and union territories are counted apart: the
+ *  percentage is over India's 28 states, so a union-territory-only trip is
+ *  honestly 0% rather than being rounded up. */
+export type JourneyT = {
+  cities: number;
+  states: number;
+  states_total: number;
+  union_territories: number;
+  union_territories_total: number;
+  india_percent: number;
+  visited: {
+    city_slug: string;
+    name: string;
+    state: string;
+    visited_at: string;
+  }[];
+};
+
+/** What sits where a booking button would. "interested" is the bucket list,
+ *  "visited" also fills in the journey map. */
+export type InterestStatus = "interested" | "going" | "visited";
+
+export type InterestPlace = Business & {
+  interest_status: InterestStatus;
+  interest_at: string;
+};
 
 export type ReelT = {
   reel_id: string;

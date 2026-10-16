@@ -114,7 +114,7 @@ export default function Profile() {
         <Text style={styles.section}>Account</Text>
         <View style={styles.rowGroup}>
           <SettingRow icon="location-outline" label="Change city" hint={user?.home_city ?? "Goa"} onPress={() => router.push("/city")} testID="settings-city" />
-          <SettingRow icon="heart-outline" label="Saved places" onPress={() => router.push("/(tabs)/saved")} testID="settings-saved" />
+          <SettingRow icon="bookmarks-outline" label="Saved places" onPress={() => router.push("/(tabs)/trips")} testID="settings-saved" />
           <SettingRow icon="calendar-outline" label="All bookings" hint={`${bookings.length}`} onPress={() => router.push("/bookings" as any)} testID="settings-bookings" />
           <SettingRow icon="help-circle-outline" label="Help & Support" onPress={() => router.push("/support" as any)} testID="settings-help" />
         </View>

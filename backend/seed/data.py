@@ -40,10 +40,32 @@ CITIES = [
      "image": "https://images.unsplash.com/photo-1587474260584-136574528ed5?w=1200&q=85"},
 ]
 
-# Denominator for the journey tracker's "% of India" figure: 28 states + 8
-# union territories. Coverage is measured against the whole country, not just
-# the cities currently listed, so the number stays honest as cities are added.
-INDIA_STATE_COUNT = 36
+# India's 28 states and 8 union territories, held separately because the
+# journey tracker counts them separately.
+#
+# explore91.com leads with "twenty-eight states" and shows 3% for a single
+# state visited, which is floor(1/28*100) -- so the site measures coverage
+# against the 28 states only. We match that, but a city can sit in a union
+# territory (Delhi and Leh both do), and lumping those in with the 28 would
+# make the percentage wrong. UT coverage is therefore reported on its own
+# rather than silently folded into the state count.
+INDIA_STATES = frozenset({
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+    "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+    "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
+    "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim",
+    "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand",
+    "West Bengal",
+})
+
+INDIA_UNION_TERRITORIES = frozenset({
+    "Andaman and Nicobar Islands", "Chandigarh",
+    "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir",
+    "Ladakh", "Lakshadweep", "Puducherry",
+})
+
+INDIA_STATE_COUNT = len(INDIA_STATES)                    # 28
+INDIA_UT_COUNT = len(INDIA_UNION_TERRITORIES)            # 8
 
 CATEGORIES = [
     {"slug": "restaurants", "name": "Restaurants", "icon": "restaurant-outline"},

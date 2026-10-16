@@ -98,6 +98,47 @@ class TestCityGeography:
         grouped = {c["slug"] for g in groups for c in g["cities"]}
         assert grouped == {c["slug"] for c in cities}
 
+    def test_grouped_reports_content_counts(self):
+        """The picker needs to know what's actually in a city."""
+        groups = requests.get(f"{BASE_URL}/api/cities/grouped", timeout=15).json()
+        for g in groups:
+            for c in g["cities"]:
+                assert isinstance(c["business_count"], int)
+                assert isinstance(c["reel_count"], int)
+                assert c["business_count"] >= 0 and c["reel_count"] >= 0
+                assert isinstance(c["is_live"], bool)
+
+    def test_is_live_tracks_business_count(self):
+        """A city is live exactly when it has something to show."""
+        groups = requests.get(f"{BASE_URL}/api/cities/grouped", timeout=15).json()
+        for g in groups:
+            for c in g["cities"]:
+                assert c["is_live"] == (c["business_count"] > 0), c["slug"]
+
+    def test_grouped_counts_match_the_business_list(self):
+        """Guard against the count drifting from what /businesses returns."""
+        groups = requests.get(f"{BASE_URL}/api/cities/grouped", timeout=15).json()
+        live = [c for g in groups for c in g["cities"] if c["is_live"]]
+        assert live, "expected at least one city with content"
+        c = live[0]
+        listed = requests.get(
+            f"{BASE_URL}/api/businesses",
+            params={"city": c["slug"], "limit": 100},
+            timeout=20,
+        )
+        assert listed.status_code == 200
+        # /businesses caps at 100, so only compare when the city fits under it.
+        if c["business_count"] <= 100:
+            assert len(listed.json()) == c["business_count"]
+
+    def test_empty_cities_are_not_hidden_from_grouped(self):
+        """They must stay in the payload so the client can label them, not
+        vanish - one source of truth for which cities exist."""
+        cities = requests.get(f"{BASE_URL}/api/cities", timeout=15).json()
+        groups = requests.get(f"{BASE_URL}/api/cities/grouped", timeout=15).json()
+        grouped = {c["slug"] for g in groups for c in g["cities"]}
+        assert grouped == {c["slug"] for c in cities}
+
 
 class TestJourney:
     def test_requires_auth(self):
@@ -133,10 +174,16 @@ class TestJourney:
 
     def test_percent_is_share_of_all_states_not_listed_cities(self, traveller):
         """Coverage is measured against the whole country, so it stays honest
-        as cities are added."""
+        as cities are added.
+
+        The denominator is the 28 states, matching explore91.com, and the
+        figure is truncated rather than rounded so a single state reads as the
+        3% the site shows. Union territories are counted on their own.
+        """
         j = requests.get(f"{BASE_URL}/api/journey", headers=traveller["H"], timeout=15).json()
-        assert j["states_total"] == 36
-        assert j["india_percent"] == round(j["states"] / 36 * 100)
+        assert j["states_total"] == 28
+        assert j["union_territories_total"] == 8
+        assert j["india_percent"] == int(j["states"] / 28 * 100)
 
     def test_unknown_city_rejected(self, traveller):
         r = requests.post(f"{BASE_URL}/api/journey/visit", headers=traveller["H"],

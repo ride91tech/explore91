@@ -9,6 +9,9 @@ import { useAsyncAction } from "@/src/components/admin/feedback";
 type City = {
   slug: string; name: string; state?: string; region?: string;
   tagline: string; image: string; source?: string;
+  // How much there is to see. A city with no businesses shows as
+  // "coming soon" in the app rather than as a browsable city.
+  business_count?: number; reel_count?: number; is_live?: boolean;
 };
 
 export default function CitiesAdmin() {
@@ -21,6 +24,10 @@ export default function CitiesAdmin() {
   const [tagline, setTagline] = useState("");
   const [image, setImage] = useState("");
   const { run, isBusy } = useAsyncAction();
+
+  // Older API versions don't send is_live; treat those cities as live so the
+  // console never under-reports against a backend that predates the field.
+  const liveCount = items.filter((c) => c.is_live !== false).length;
 
   const load = useCallback(async () => {
     setItems(await api<City[]>("/admin/cities", { auth: true }));
@@ -69,11 +76,17 @@ export default function CitiesAdmin() {
 
   return (
     <View>
-      <PageHeader title="Cities" subtitle={`${items.length} live cities`} />
+      <PageHeader
+        title="Cities"
+        subtitle={`${items.length} cities · ${liveCount} live · ${items.length - liveCount} awaiting content`}
+      />
 
       <Card style={{ marginBottom: 24 }}>
         <Text style={styles.section}>Launch a new city</Text>
-        <Text style={styles.hint}>New cities show up on the customer app immediately, ready for business submissions.</Text>
+        <Text style={styles.hint}>
+          A new city is listed as &ldquo;coming soon&rdquo; in the app until it has at least
+          one business. Add listings before announcing it.
+        </Text>
         <View style={styles.form}>
           <TextInput placeholder="slug (e.g. bengaluru)" placeholderTextColor={colors.onSurfaceTertiary} value={slug} onChangeText={(s) => setSlug(s.toLowerCase())} style={[styles.input, { flex: 1 }]} />
           <TextInput placeholder="Display name" placeholderTextColor={colors.onSurfaceTertiary} value={name} onChangeText={setName} style={[styles.input, { flex: 1 }]} />
@@ -98,7 +111,7 @@ export default function CitiesAdmin() {
         <Loading label="Loading cities…" />
       ) : (
         <Table>
-          <TableHead cols={[{ label: "City", width: 2.6 }, { label: "State", width: 1.4 }, { label: "Picker heading", width: 1.4 }, { label: "Tagline", width: 2.4 }, { label: "Source", width: 1 }, { label: "Actions", width: 1 }]} />
+          <TableHead cols={[{ label: "City", width: 2.6 }, { label: "State", width: 1.3 }, { label: "Picker heading", width: 1.3 }, { label: "Content", width: 1.8 }, { label: "Tagline", width: 1.8 }, { label: "Source", width: 1 }, { label: "Actions", width: 1 }]} />
           {items.length === 0 ? <Empty /> : items.map((c) => (
             <TableRow key={c.slug}>
               <Cell width={2.6}>
@@ -110,11 +123,20 @@ export default function CitiesAdmin() {
                   </View>
                 </View>
               </Cell>
-              <Cell width={1.4}>
+              <Cell width={1.3}>
                 {c.state ? c.state : <Text style={styles.missing}>Not set</Text>}
               </Cell>
-              <Cell width={1.4}>{c.region || c.state || "—"}</Cell>
-              <Cell width={2.4}>{c.tagline}</Cell>
+              <Cell width={1.3}>{c.region || c.state || "—"}</Cell>
+              <Cell width={1.8}>
+                {c.is_live === false ? (
+                  <Pill label="Coming soon" tone="warn" />
+                ) : (
+                  <Text style={styles.counts}>
+                    {c.business_count ?? "—"} places · {c.reel_count ?? "—"} reels
+                  </Text>
+                )}
+              </Cell>
+              <Cell width={1.8}>{c.tagline}</Cell>
               <Cell width={1}><Pill label={c.source === "cms" ? "Custom" : "Built-in"} tone={c.source === "cms" ? "brand" : "neutral"} /></Cell>
               <Cell width={1}>
                 {c.source === "cms" ? (
@@ -141,6 +163,7 @@ const styles = StyleSheet.create({
   cityName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
   slug: { fontFamily: "monospace", fontSize: tType.sm, color: colors.onSurface },
   missing: { fontSize: tType.sm, color: colors.warning, fontStyle: "italic" },
+  counts: { fontSize: tType.sm, color: colors.onSurfaceSecondary },
   subhint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 8, lineHeight: 19 },
   readonly: { fontSize: tType.sm, color: colors.onSurfaceTertiary, fontStyle: "italic" },
   err: { color: colors.error, marginTop: 12, fontSize: tType.sm },

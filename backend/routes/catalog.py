@@ -16,6 +16,52 @@ def _with_region(city: dict) -> dict:
     return {**city, "state": state, "region": city.get("region") or state}
 
 
+async def content_counts() -> dict:
+    """Published content per city slug: {slug: {"business_count", "reel_count"}}.
+
+    Two grouped aggregations rather than a count per city, so the cost doesn't
+    grow as cities are added.
+    """
+    counts: dict = {}
+
+    def bump(slug, key, n):
+        if not slug:
+            return
+        counts.setdefault(slug, {"business_count": 0, "reel_count": 0})[key] = int(n)
+
+    async for row in db.businesses.aggregate(
+        [
+            {"$match": {"is_approved": {"$ne": False}}},
+            {"$group": {"_id": "$city", "n": {"$sum": 1}}},
+        ]
+    ):
+        bump(row["_id"], "business_count", row["n"])
+
+    async for row in db.reels.aggregate(
+        [{"$group": {"_id": "$city", "n": {"$sum": 1}}}]
+    ):
+        bump(row["_id"], "reel_count", row["n"])
+
+    return counts
+
+
+def with_content(city: dict, counts: dict) -> dict:
+    """Annotate a city with how much there is to see in it.
+
+    The home screen is built entirely from businesses, so a city without any
+    has nothing to render. Flagging it here lets the picker offer it as
+    "coming soon" instead of dropping the user into empty carousels.
+    """
+    row = counts.get(city["slug"]) or {}
+    businesses = int(row.get("business_count", 0))
+    return {
+        **city,
+        "business_count": businesses,
+        "reel_count": int(row.get("reel_count", 0)),
+        "is_live": businesses > 0,
+    }
+
+
 @router.get("/cities")
 async def get_cities():
     custom = await db.cities_cms.find({}, {"_id": 0}).to_list(200)
@@ -30,11 +76,19 @@ async def get_cities_grouped():
 
     Regions are ordered by how many cities they hold, then alphabetically, so
     the picker stays stable as cities are added.
+
+    Every city carries `business_count`, `reel_count` and `is_live`. Cities
+    with no content stay in their region bucket rather than being hidden, so
+    the client can show them as "coming soon" and keep one source of truth for
+    which cities exist.
     """
     cities = await get_cities()
+    counts = await content_counts()
     buckets: dict = {}
     for c in cities:
-        buckets.setdefault(c["region"] or "Other", []).append(c)
+        buckets.setdefault(c["region"] or "Other", []).append(
+            with_content(c, counts)
+        )
     return [
         {"region": region, "cities": sorted(items, key=lambda c: c["name"])}
         for region, items in sorted(

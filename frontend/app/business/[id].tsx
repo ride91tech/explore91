@@ -241,7 +241,7 @@ export default function BusinessDetail() {
                     </View>
                     <Pressable
                       testID={`svc-book-${i}`}
-                      onPress={() => router.push({ pathname: `/book/${biz.business_id}`, params: { service: s.name } })}
+                      onPress={() => router.push({ pathname: "/book/[id]", params: { id: biz.business_id, service: s.name } })}
                       style={styles.svcBtn}
                     >
                       <Text style={styles.svcBtnText}>Book</Text>

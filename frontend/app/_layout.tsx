@@ -21,10 +21,21 @@ function AuthGate() {
   useEffect(() => {
     if (loading) return;
     const first = segments[0];
+    const second = segments[1];
     const inAuth = first === "login";
-    const inAdmin = first === "admin";     // web-only admin has its own gate
-    const inOwner = first === "owner";     // owner portal has its own gate
-    if (!user && !inAuth && !inAdmin && !inOwner) router.replace("/login");
+
+    // explore91.com is browse-first: home, discover, reels, place pages and
+    // the city picker are all open, and you sign in only for the parts that
+    // are about you. Guarding those instead of the whole app means a visitor
+    // who has just installed it can look around before being asked for an
+    // account. Admin and owner keep their own gates.
+    const needsAccount =
+      (first === "(tabs)" && (second === "trips" || second === "profile")) ||
+      first === "bookings" ||
+      first === "book" ||
+      first === "support";
+
+    if (!user && needsAccount) router.replace("/login");
     if (user && inAuth) {
       // Honor ?returnTo=/owner if present
       const returnTo = typeof window !== "undefined"
