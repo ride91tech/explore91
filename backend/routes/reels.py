@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from core.db import db
 from core.security import client_key, get_current_user, rate_limit, require_role
 from models import Reel, ReelCreate, ReelLikeToggle
+from seed.data import CATEGORIES
 
 router = APIRouter()
 
@@ -27,6 +28,41 @@ async def list_reels(
         await db.reels.find(query, {"_id": 0})
         .sort("created_at", -1).limit(limit).to_list(limit)
     )
+
+
+# Declared before /reels/{reel_id}: FastAPI matches in order, and the dynamic
+# route would otherwise swallow "topics" as a reel id.
+@router.get("/reels/topics")
+async def reel_topics(city: Optional[str] = None):
+    """Topic rails for the reels feed.
+
+    Built from the categories actually present in the city's reels rather
+    than a fixed list. explore91.com shows a fixed set of topics, but over
+    real data that strands you on rails with nothing behind them — the Goa
+    feed has four topics, not fourteen.
+    """
+    match: dict = {"is_hidden": {"$ne": True}}
+    if city:
+        match["city"] = city.lower()
+
+    rows = await db.reels.aggregate([
+        {"$match": match},
+        {"$group": {"_id": "$business_category", "count": {"$sum": 1}}},
+    ]).to_list(100)
+
+    names = {c["slug"]: c["name"] for c in CATEGORIES}
+    topics = [
+        {
+            "slug": r["_id"],
+            "name": names.get(r["_id"], (r["_id"] or "").replace("-", " ").title()),
+            "count": r["count"],
+        }
+        for r in rows
+        if r["_id"]
+    ]
+    # Busiest first, then alphabetical, so the rail order is stable.
+    topics.sort(key=lambda t: (-t["count"], t["name"]))
+    return topics
 
 
 @router.get("/reels/{reel_id}")

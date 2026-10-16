@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Platform,
   Share,
+  Linking,
+  ScrollView,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -17,7 +19,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { VideoView, useVideoPlayer } from "expo-video";
-import { api, ReelT } from "@/src/api";
+import { api, InterestPlace, InterestStatus, ReelT } from "@/src/api";
+import { reelCta, mapsUrl } from "@/src/reelCta";
 import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/components/Toast";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
@@ -37,22 +40,98 @@ export default function ReelsFeed() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [screenFocused, setScreenFocused] = useState(false);
+  const [topics, setTopics] = useState<{ slug: string; name: string; count: number }[]>([]);
+  const [topic, setTopic] = useState<string | null>(null);   // null = For you
+  // business_id -> interested/going/visited, so the rail reflects what you
+  // already flagged when a reel scrolls back into view.
+  const [interest, setInterest] = useState<Record<string, InterestStatus>>({});
 
   const cityLower = (user?.home_city ?? "Goa").toLowerCase();
 
   const load = useCallback(async () => {
     try {
-      const [list, likes] = await Promise.all([
-        api<ReelT[]>(`/reels?city=${cityLower}&limit=30`),
+      const feed = topic
+        ? `/reels?city=${cityLower}&category=${topic}&limit=30`
+        : `/reels?city=${cityLower}&limit=30`;
+      const [list, likes, rails, flagged] = await Promise.all([
+        api<ReelT[]>(feed),
         user ? api<string[]>("/reels/my/likes", { auth: true }).catch(() => []) : Promise.resolve([]),
+        api<{ slug: string; name: string; count: number }[]>(
+          `/reels/topics?city=${cityLower}`
+        ).catch(() => []),
+        user
+          ? api<InterestPlace[]>("/places/interest", { auth: true }).catch(() => [])
+          : Promise.resolve([] as InterestPlace[]),
       ]);
       setReels(list);
       setLikedIds(new Set(likes));
+      setTopics(rails);
+      setInterest(
+        Object.fromEntries(flagged.map((f) => [f.business_id, f.interest_status]))
+      );
     } catch (e) { console.log("reels", e); }
     finally { setLoading(false); }
-  }, [cityLower, user]);
+  }, [cityLower, user, topic]);
 
   useEffect(() => { load(); }, [load]);
+
+  /** Interested / Going / Visited, straight onto the place. Tapping the
+   *  active one again clears it, so the rail is a toggle, not a ratchet. */
+  const flagPlace = useCallback(
+    async (businessId: string, status: InterestStatus) => {
+      if (!user) { router.push("/login"); return; }
+      const prev = interest[businessId];
+      const next = prev === status ? undefined : status;
+
+      setInterest((m) => {
+        const copy = { ...m };
+        if (next) copy[businessId] = next;
+        else delete copy[businessId];
+        return copy;
+      });
+
+      try {
+        if (next) {
+          await api(`/places/${businessId}/interest`, {
+            method: "PUT", auth: true,
+            body: JSON.stringify({ status: next }),
+          });
+        } else {
+          await api(`/places/${businessId}/interest`, { method: "DELETE", auth: true });
+        }
+      } catch (e: any) {
+        // Put the rail back where it was rather than leaving it lying.
+        setInterest((m) => {
+          const copy = { ...m };
+          if (prev) copy[businessId] = prev;
+          else delete copy[businessId];
+          return copy;
+        });
+        show(e?.status === 401 ? "Sign in to save places." : "Couldn't save that.", "error");
+      }
+    },
+    [user, interest, router, show]
+  );
+
+  /** Opening directions is what fills in the journey map — the site says it
+   *  happens on its own, and this is the wiring behind that. */
+  const openDirections = useCallback(
+    async (reel: ReelT) => {
+      try {
+        await Linking.openURL(mapsUrl(reel.business_name, reel.city));
+      } catch {
+        show("Couldn't open maps.", "error");
+        return;
+      }
+      if (user) {
+        api("/journey/visit", {
+          method: "POST", auth: true,
+          body: JSON.stringify({ city_slug: reel.city }),
+        }).catch(() => {});
+      }
+    },
+    [user, show]
+  );
 
   useFocusEffect(useCallback(() => {
     setScreenFocused(true);
@@ -156,6 +235,9 @@ export default function ReelsFeed() {
             onLike={() => toggleLike(item.reel_id)}
             onOpenBusiness={() => item.business_id && router.push(`/business/${item.business_id}`)}
             onShare={() => shareReel(item)}
+            interest={item.business_id ? interest[item.business_id] : undefined}
+            onFlag={(status) => item.business_id && flagPlace(item.business_id, status)}
+            onDirections={() => openDirections(item)}
             height={itemH}
             width={width}
             insets={insets}
@@ -167,6 +249,33 @@ export default function ReelsFeed() {
         <Text style={styles.brand}>Reels</Text>
         <Text style={styles.cityBadge}>{user?.home_city ?? "Goa"}</Text>
       </View>
+
+      {/* Topic rails. Built from what the city actually has, so a rail never
+          opens onto an empty feed. */}
+      {topics.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.rails, { top: insets.top + 46 }]}
+          contentContainerStyle={styles.railsInner}
+        >
+          <TopicChip
+            label="For you"
+            active={topic === null}
+            onPress={() => setTopic(null)}
+            testID="reel-topic-foryou"
+          />
+          {topics.map((t) => (
+            <TopicChip
+              key={t.slug}
+              label={t.name}
+              active={topic === t.slug}
+              onPress={() => setTopic(t.slug)}
+              testID={`reel-topic-${t.slug}`}
+            />
+          ))}
+        </ScrollView>
+      ) : null}
     </View>
   );
 }
@@ -178,6 +287,9 @@ function ReelItem({
   onLike,
   onOpenBusiness,
   onShare,
+  interest,
+  onFlag,
+  onDirections,
   height,
   width,
   insets,
@@ -188,6 +300,9 @@ function ReelItem({
   onLike: () => void;
   onOpenBusiness: () => void;
   onShare: () => void;
+  interest?: InterestStatus;
+  onFlag: (status: InterestStatus) => void;
+  onDirections: () => void;
   height: number;
   width: number;
   insets: { top: number; bottom: number };
@@ -255,6 +370,26 @@ function ReelItem({
           label={reel.likes.toLocaleString()}
           onPress={onLike}
         />
+        {/* The site puts Going / Interested on every reel. These write
+            straight through to the place, and Visited is what the map reads. */}
+        {reel.business_id ? (
+          <>
+            <ReelAction
+              testID={`reel-going-${reel.reel_id}`}
+              icon={interest === "going" ? "checkmark-circle" : "checkmark-circle-outline"}
+              color={interest === "going" ? colors.brandTertiary : "#FFF"}
+              label="Going"
+              onPress={() => onFlag("going")}
+            />
+            <ReelAction
+              testID={`reel-interested-${reel.reel_id}`}
+              icon={interest === "interested" ? "bookmark" : "bookmark-outline"}
+              color={interest === "interested" ? colors.brandTertiary : "#FFF"}
+              label="Interested"
+              onPress={() => onFlag("interested")}
+            />
+          </>
+        ) : null}
         <ReelAction
           testID={`reel-share-${reel.reel_id}`}
           icon="paper-plane-outline"
@@ -282,17 +417,46 @@ function ReelItem({
         </View>
       </View>
 
-      {/* Book Now CTA */}
+      {/* The call to action depends on what this is a reel of: you get
+          directions to a beach, view a restaurant, book a stay. A blanket
+          "Book" was wrong for a product that only books stays and deals. */}
       {reel.business_id ? (
-        <Pressable
-          testID={`reel-book-${reel.reel_id}`}
-          onPress={onOpenBusiness}
-          style={[reelStyles.bookBtn, { bottom: insets.bottom + 100 }]}
-        >
-          <Text style={reelStyles.bookText}>Book</Text>
-          <Ionicons name="arrow-forward" size={14} color={colors.onSurface} />
-        </Pressable>
+        (() => {
+          const cta = reelCta(reel.business_category);
+          return (
+            <Pressable
+              testID={`reel-cta-${reel.reel_id}`}
+              onPress={cta.kind === "directions" ? onDirections : onOpenBusiness}
+              style={[reelStyles.bookBtn, { bottom: insets.bottom + 100 }]}
+            >
+              <Text style={reelStyles.bookText}>{cta.label}</Text>
+              <Ionicons name={cta.icon} size={14} color={colors.onSurface} />
+            </Pressable>
+          );
+        })()
       ) : null}
+    </Pressable>
+  );
+}
+
+function TopicChip({
+  label,
+  active,
+  onPress,
+  testID,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  testID: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      style={[styles.topicChip, active && styles.topicChipActive]}
+    >
+      <Text style={[styles.topicText, active && styles.topicTextActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -309,6 +473,28 @@ function ReelAction({ icon, label, onPress, color, testID }: any) {
 }
 
 const styles = StyleSheet.create({
+  rails: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    maxHeight: 40,
+    zIndex: 5,
+  },
+  railsInner: { paddingHorizontal: spacing.lg, gap: 8, alignItems: "center" },
+  topicChip: {
+    paddingHorizontal: 14,
+    height: 30,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  topicChipActive: { backgroundColor: "#FFF", borderColor: "#FFF" },
+  topicText: { color: "#FFF", fontSize: tType.sm, fontWeight: "700" },
+  topicTextActive: { color: colors.onSurface },
+
   container: { flex: 1, backgroundColor: "#000" },
   loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000", gap: spacing.md },
   emptyTitle: { color: "#FFF", fontSize: 18, fontWeight: "700", textAlign: "center" },
@@ -339,7 +525,7 @@ const styles = StyleSheet.create({
 
 const reelStyles = StyleSheet.create({
   item: { backgroundColor: "#000", position: "relative" },
-  videoBox: { ...StyleSheet.absoluteFillObject, backgroundColor: "#000" },
+  videoBox: { ...(StyleSheet.absoluteFill as object), backgroundColor: "#000" },
   mutePill: {
     position: "absolute",
     top: 100,

@@ -93,6 +93,51 @@ class TestReelsList:
         assert len(reels) == 5, "with 24 seeded reels, limit=5 should return exactly 5"
 
 
+class TestReelTopics:
+    """Topic rails for the feed, built from what a city actually has."""
+
+    def test_topics_is_not_parsed_as_a_reel_id(self, base_url, api_client):
+        """/reels/topics must be declared before /reels/{reel_id}.
+
+        FastAPI matches in declaration order, so getting this wrong turns the
+        rails into a 404 for a reel called "topics".
+        """
+        r = api_client.get(f"{base_url}/api/reels/topics")
+        assert r.status_code == 200, r.text
+        assert isinstance(r.json(), list)
+
+    def test_shape_and_ordering(self, base_url, api_client):
+        r = api_client.get(f"{base_url}/api/reels/topics",
+                         params={"city": "goa"})
+        assert r.status_code == 200
+        topics = r.json()
+        assert topics, "Goa has reels, so it should have topics"
+        for t in topics:
+            assert t["slug"] and t["name"]
+            assert isinstance(t["count"], int) and t["count"] > 0
+        counts = [t["count"] for t in topics]
+        assert counts == sorted(counts, reverse=True), "busiest rail first"
+
+    def test_counts_match_the_filtered_feed(self, base_url, api_client):
+        """A rail must never open onto an empty or short feed."""
+        topics = api_client.get(f"{base_url}/api/reels/topics",
+                              params={"city": "goa"}).json()
+        top = topics[0]
+        feed = api_client.get(f"{base_url}/api/reels",
+                            params={"city": "goa", "category": top["slug"],
+                                    "limit": 100})
+        assert feed.status_code == 200
+        assert len(feed.json()) == top["count"]
+
+    def test_scoped_to_the_city(self, base_url, api_client):
+        goa = api_client.get(f"{base_url}/api/reels/topics",
+                           params={"city": "goa"}).json()
+        nowhere = api_client.get(f"{base_url}/api/reels/topics",
+                               params={"city": "atlantis"}).json()
+        assert goa
+        assert nowhere == [], "a city with no reels has no rails"
+
+
 class TestReelDetail:
     def test_get_single_reel(self, base_url, api_client):
         r = api_client.get(f"{base_url}/api/reels", params={"limit": 1})
