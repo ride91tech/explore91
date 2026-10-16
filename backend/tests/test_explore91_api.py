@@ -97,6 +97,43 @@ class TestBusinesses:
         assert r.status_code == 404
 
 
+class TestNearby:
+    """"While you're here" — the cross-sell row on a place page."""
+
+    @pytest.fixture(scope="class")
+    def base_place(self, api_client, base_url):
+        r = api_client.get(f"{base_url}/api/businesses", params={"city": "goa", "limit": 1})
+        return r.json()[0]
+
+    def test_returns_other_places_in_the_same_city(self, api_client, base_url, base_place):
+        r = api_client.get(f"{base_url}/api/businesses/{base_place['business_id']}/nearby")
+        assert r.status_code == 200, r.text
+        rows = r.json()
+        assert rows
+        assert all(b["city"] == base_place["city"] for b in rows)
+        assert all(b["business_id"] != base_place["business_id"] for b in rows),             "a place is not nearby itself"
+        assert all("_id" not in b for b in rows)
+
+    def test_prefers_a_different_category(self, api_client, base_url, base_place):
+        """Three more restaurants under a restaurant is a poor suggestion."""
+        r = api_client.get(f"{base_url}/api/businesses/{base_place['business_id']}/nearby")
+        rows = r.json()
+        # Goa is well stocked, so the row should fill without same-category fallback.
+        assert all(b["category"] != base_place["category"] for b in rows)
+
+    def test_respects_limit(self, api_client, base_url, base_place):
+        r = api_client.get(
+            f"{base_url}/api/businesses/{base_place['business_id']}/nearby",
+            params={"limit": 2},
+        )
+        assert r.status_code == 200
+        assert len(r.json()) <= 2
+
+    def test_unknown_place_404(self, api_client, base_url):
+        r = api_client.get(f"{base_url}/api/businesses/not_a_real_id/nearby")
+        assert r.status_code == 404
+
+
 # ---- Auth (unauthenticated) -----------------------------------------------
 class TestAuthUnauth:
     def test_google_rejects_bogus_token(self, api_client, base_url):

@@ -71,6 +71,10 @@ export type Business = {
   category: string;
   city: string;
   address: string;
+  /** Broader area label shown above the name; falls back to `address`. */
+  area?: string | null;
+  /** One evocative reason to go; falls back to `description`. */
+  why_go?: string | null;
   lat: number;
   lng: number;
   cover_image: string;

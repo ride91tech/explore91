@@ -18,8 +18,9 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { api, Business } from "@/src/api";
+import { api, Business, InterestStatus } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
+import { useAuth } from "@/src/auth";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
 
 type ReviewT = {
@@ -35,6 +36,7 @@ export default function BusinessDetail() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { show } = useToast();
+  const { user } = useAuth();
   const [biz, setBiz] = useState<Business | null>(null);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,6 +45,9 @@ export default function BusinessDetail() {
   const [newRating, setNewRating] = useState(5);
   const [newComment, setNewComment] = useState("");
   const [postingReview, setPostingReview] = useState(false);
+  const [nearby, setNearby] = useState<Business[]>([]);
+  const [interest, setInterest] = useState<InterestStatus | null>(null);
+  const [savingInterest, setSavingInterest] = useState(false);
 
   const loadReviews = useCallback(async () => {
     try {
@@ -85,14 +90,43 @@ export default function BusinessDetail() {
     }
   };
 
+  /** Interested / Going / Visited. Tapping the active state clears it, and
+   *  Visited is what puts the city on the journey map. */
+  const flag = async (status: InterestStatus) => {
+    if (!user) { router.push("/login"); return; }
+    const prev = interest;
+    const next = prev === status ? null : status;
+    setInterest(next);
+    setSavingInterest(true);
+    try {
+      if (next) {
+        await api(`/places/${id}/interest`, {
+          method: "PUT", auth: true, body: JSON.stringify({ status: next }),
+        });
+      } else {
+        await api(`/places/${id}/interest`, { method: "DELETE", auth: true });
+      }
+    } catch (e: any) {
+      setInterest(prev);
+      show(e?.status === 401 ? "Sign in to save places." : "Couldn't save that.", "error");
+    } finally {
+      setSavingInterest(false);
+    }
+  };
+
   const load = useCallback(async () => {
     try {
-      const [b, savedList] = await Promise.all([
+      const [b, savedList, near, flag] = await Promise.all([
         api<Business>(`/businesses/${id}`),
         api<Business[]>("/saved", { auth: true }).catch(() => []),
+        api<Business[]>(`/businesses/${id}/nearby?limit=3`).catch(() => []),
+        api<{ status: InterestStatus | null }>(`/places/${id}/interest`, { auth: true })
+          .catch(() => ({ status: null })),
       ]);
       setBiz(b);
       setSaved(savedList.some((s) => s.business_id === id));
+      setNearby(near);
+      setInterest(flag?.status ?? null);
     } catch (e) {
       console.log("business detail", e);
     } finally {
@@ -178,6 +212,11 @@ export default function BusinessDetail() {
               <View key={t} style={styles.tag}><Text style={styles.tagText}>{t}</Text></View>
             ))}
           </View>
+          {/* The site leads with the area, then the name. `area` is optional;
+              the seeded address already reads as one ("Grande Island"). */}
+          <Text style={styles.areaKicker}>
+            {(biz.area || biz.address || "").toUpperCase()}
+          </Text>
           <Text style={styles.title} testID="business-name">{biz.name}</Text>
           <View style={styles.metaRow}>
             <Ionicons name="star" size={14} color={colors.warning} />
@@ -195,7 +234,75 @@ export default function BusinessDetail() {
             <Text style={styles.address}>{biz.open_hours}</Text>
           </View>
 
-          <Text style={styles.desc}>{biz.description}</Text>
+          {/* WHY GO — one reason, the way the site frames a place. Falls back
+              to the factual description until editorial copy exists. */}
+          {biz.why_go || biz.description ? (
+            <View style={{ marginTop: spacing.lg }}>
+              <Text style={styles.sectionKicker}>WHY GO</Text>
+              <Text style={styles.desc}>{biz.why_go || biz.description}</Text>
+            </View>
+          ) : null}
+
+          {/* ADD TO JOURNEY. This is what the site puts where a booking button
+              would be — "No booking. Just a note for later." */}
+          <View style={{ marginTop: spacing.xl }}>
+            <Text style={styles.sectionKicker}>ADD TO JOURNEY</Text>
+            <View style={styles.journeyRow}>
+              {(["interested", "going", "visited"] as InterestStatus[]).map((s) => {
+                const active = interest === s;
+                return (
+                  <Pressable
+                    key={s}
+                    testID={`interest-${s}`}
+                    disabled={savingInterest}
+                    onPress={() => flag(s)}
+                    style={[styles.journeyBtn, active && styles.journeyBtnActive]}
+                  >
+                    <Ionicons
+                      name={
+                        s === "interested" ? (active ? "bookmark" : "bookmark-outline")
+                        : s === "going" ? (active ? "checkmark-circle" : "checkmark-circle-outline")
+                        : (active ? "flag" : "flag-outline")
+                      }
+                      size={15}
+                      color={active ? "#FFF" : colors.onSurfaceSecondary}
+                    />
+                    <Text style={[styles.journeyBtnText, active && styles.journeyBtnTextActive]}>
+                      {s === "interested" ? "Interested" : s === "going" ? "Going" : "Visited"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.journeyNote}>
+              Marking a place visited adds its city to your journey.
+            </Text>
+          </View>
+
+          {/* NEARBY */}
+          {nearby.length > 0 ? (
+            <View style={{ marginTop: spacing.xl }}>
+              <Text style={styles.sectionKicker}>NEARBY</Text>
+              <Text style={styles.nearbyHead}>While you're here</Text>
+              <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+                {nearby.map((n) => (
+                  <Pressable
+                    key={n.business_id}
+                    testID={`nearby-${n.business_id}`}
+                    onPress={() => router.push(`/business/${n.business_id}`)}
+                    style={styles.nearbyRow}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.nearbyCat}>{n.category.toUpperCase()}</Text>
+                      <Text style={styles.nearbyName}>{n.name}</Text>
+                      <Text style={styles.nearbyMeta}>{n.address}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceTertiary} />
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
 
           {/* Offers */}
           {biz.offers.length > 0 && (
@@ -363,6 +470,53 @@ export default function BusinessDetail() {
 }
 
 const styles = StyleSheet.create({
+  areaKicker: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    color: colors.onSurfaceTertiary,
+    marginBottom: 4,
+  },
+  sectionKicker: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    color: colors.onSurfaceTertiary,
+    marginBottom: 6,
+  },
+  journeyRow: { flexDirection: "row", gap: 8 },
+  journeyBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  journeyBtnActive: { backgroundColor: colors.brandTertiary },
+  journeyBtnText: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurfaceSecondary },
+  journeyBtnTextActive: { color: "#FFF" },
+  journeyNote: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 8 },
+  nearbyHead: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  nearbyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  nearbyCat: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1,
+    color: colors.onSurfaceTertiary,
+  },
+  nearbyName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface, marginTop: 2 },
+  nearbyMeta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 1 },
+
   loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   topBar: {
     position: "absolute",

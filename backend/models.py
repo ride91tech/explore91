@@ -46,6 +46,9 @@ class Business(BaseModel):
     category: str
     city: str
     address: str
+    # Broader area label shown above the name ("North Goa"), as on the site.
+    # Optional: falls back to `address`, which is already area-ish in the seed.
+    area: Optional[str] = None
     lat: float
     lng: float
     cover_image: str
@@ -55,6 +58,9 @@ class Business(BaseModel):
     price_range: str = "$$"
     tags: List[str] = []
     description: str = ""
+    # The site's "WHY GO" line — one evocative reason, distinct from the
+    # factual description. Optional; the UI falls back to `description`.
+    why_go: Optional[str] = None
     open_hours: str = "10:00 AM - 11:00 PM"
     phone: str = ""
     is_verified: bool = True
@@ -70,7 +76,9 @@ class BusinessCreate(BaseModel):
     category: str
     city: str
     address: str
+    area: Optional[str] = Field(default=None, max_length=80)
     description: str = ""
+    why_go: Optional[str] = Field(default=None, max_length=280)
     cover_image: Optional[str] = None
     price_range: str = "$$"
     tags: List[str] = []

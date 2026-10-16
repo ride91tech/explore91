@@ -151,6 +151,41 @@ async def get_business(business_id: str):
     return doc
 
 
+@router.get("/businesses/{business_id}/nearby")
+async def nearby(business_id: str, limit: int = Query(default=3, ge=1, le=10)):
+    """"While you're here" — what else is worth the walk.
+
+    Prefers a different category to the place you're on: three more
+    restaurants under a restaurant is a worse suggestion than a beach, a
+    heritage quarter and a cafe, which is how the site pitches it. Falls back
+    to the same category when the city is too thin to fill the row.
+    """
+    biz = await db.businesses.find_one(
+        {"business_id": business_id}, {"_id": 0, "city": 1, "category": 1}
+    )
+    if not biz:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    base = {
+        "is_approved": {"$ne": False},
+        "city": biz.get("city"),
+        "business_id": {"$ne": business_id},
+    }
+    others = (
+        await db.businesses.find(
+            {**base, "category": {"$ne": biz.get("category")}}, {"_id": 0}
+        ).sort("rating", -1).limit(limit).to_list(limit)
+    )
+    if len(others) < limit:
+        short = limit - len(others)
+        others += (
+            await db.businesses.find(
+                {**base, "category": biz.get("category")}, {"_id": 0}
+            ).sort("rating", -1).limit(short).to_list(short)
+        )
+    return others
+
+
 @router.get("/banners")
 async def list_banners(city: Optional[str] = None, position: Optional[str] = None):
     q: dict = {"is_active": True}
