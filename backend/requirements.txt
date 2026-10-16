@@ -26,7 +26,3 @@ python-multipart>=0.0.9
 jq>=1.6.0
 typer>=0.9.0
 httpx>=0.27.0
-# emergentintegrations is Emergent's private package (not on public PyPI) — only
-# needed for /ai/recommend and /ai/itinerary. Install separately if you have access
-# to Emergent's package index; the rest of the app runs fine without it.
-# emergentintegrations==0.2.0

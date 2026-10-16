@@ -20,8 +20,8 @@ class User(BaseModel):
     created_at: datetime
 
 
-class SessionRequest(BaseModel):
-    session_id: str
+class GoogleSignIn(BaseModel):
+    id_token: str = Field(min_length=8, max_length=4096)
 
 
 class AuthResponse(BaseModel):

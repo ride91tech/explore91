@@ -10,7 +10,17 @@ load_dotenv(ROOT_DIR / ".env")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
-EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+GOOGLE_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
+
+# OAuth client IDs that may sign in to this app. One per platform, from the
+# Google Cloud console. A token minted for any other client is rejected, which
+# is what stops someone replaying a Google token from an unrelated app.
+GOOGLE_CLIENT_IDS = {
+    c.strip()
+    for c in (os.environ.get("GOOGLE_CLIENT_IDS", "") or "").split(",")
+    if c.strip()
+}
 APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_ISSUER = "https://appleid.apple.com"
 APPLE_AUDIENCES = {

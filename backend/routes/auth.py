@@ -1,4 +1,8 @@
-"""Auth: session (Google via Emergent), Apple Sign-In, me, roles."""
+"""Auth: Google Sign-In, Apple Sign-In, me, roles.
+
+Both providers are verified here against the issuer's own JWKS — no third
+party sits in the login path.
+"""
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -12,7 +16,9 @@ from core.config import (
     APPLE_AUDIENCES,
     APPLE_ISSUER,
     APPLE_JWKS_URL,
-    EMERGENT_AUTH_URL,
+    GOOGLE_CLIENT_IDS,
+    GOOGLE_ISSUERS,
+    GOOGLE_JWKS_URL,
     SESSION_TTL_DAYS,
 )
 from core.db import db
@@ -26,7 +32,7 @@ from models import (
     AppleSignInRequest,
     AuthResponse,
     RoleUpgrade,
-    SessionRequest,
+    GoogleSignIn,
     User,
 )
 
@@ -100,26 +106,98 @@ async def _verify_apple_identity_token(identity_token: str) -> dict:
     return claims
 
 
+# --- Google Sign-In -------------------------------------------------------
+_GOOGLE_JWKS: Dict[str, object] = {}
+_GOOGLE_JWKS_FETCHED_AT: float = 0.0
+_GOOGLE_JWKS_TTL = 3600  # 1 hour
+
+
+async def _load_google_jwks(force: bool = False) -> None:
+    global _GOOGLE_JWKS, _GOOGLE_JWKS_FETCHED_AT
+    import jwt as _jwt
+
+    now = time.monotonic()
+    if not force and _GOOGLE_JWKS and (now - _GOOGLE_JWKS_FETCHED_AT) < _GOOGLE_JWKS_TTL:
+        return
+    async with httpx.AsyncClient(timeout=10.0) as hc:
+        r = await hc.get(GOOGLE_JWKS_URL)
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail="Could not reach Google JWKS")
+    _GOOGLE_JWKS = {}
+    for k in r.json().get("keys", []):
+        kid = k.get("kid")
+        if not kid:
+            continue
+        try:
+            _GOOGLE_JWKS[kid] = _jwt.PyJWK(k)
+        except Exception:
+            continue
+    _GOOGLE_JWKS_FETCHED_AT = now
+
+
+async def _verify_google_id_token(id_token: str) -> dict:
+    """Verify a Google ID token against Google's published keys."""
+    import jwt as _jwt
+
+    if not GOOGLE_CLIENT_IDS:
+        raise HTTPException(
+            status_code=503,
+            detail="Google Sign-In isn't configured. Set GOOGLE_CLIENT_IDS.",
+        )
+    try:
+        kid = _jwt.get_unverified_header(id_token).get("kid")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Malformed Google identity token")
+    if not kid:
+        raise HTTPException(status_code=401, detail="Missing kid in Google token")
+
+    await _load_google_jwks()
+    key = _GOOGLE_JWKS.get(kid)
+    if key is None:
+        # Google rotates keys; refetch once before giving up.
+        await _load_google_jwks(force=True)
+        key = _GOOGLE_JWKS.get(kid)
+        if key is None:
+            raise HTTPException(status_code=401, detail="Unknown signing key")
+
+    try:
+        return _jwt.decode(
+            id_token,
+            key=key.key,
+            algorithms=["RS256"],
+            audience=list(GOOGLE_CLIENT_IDS),
+            issuer=list(GOOGLE_ISSUERS),
+            options={"require": ["exp", "iat", "iss", "aud", "sub"]},
+        )
+    except _jwt.InvalidAudienceError:
+        raise HTTPException(status_code=401, detail="Token was issued for another app")
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Google token expired")
+    except Exception:
+        logger.exception("Google token verification failed")
+        raise HTTPException(status_code=401, detail="Invalid Google identity token")
+
+
 @router.get("/")
 async def root():
     return {"service": "Explore91", "status": "ok"}
 
 
-@router.post("/auth/session", response_model=AuthResponse)
-async def create_session(payload: SessionRequest):
-    async with httpx.AsyncClient(timeout=15.0) as hc:
-        r = await hc.get(
-            EMERGENT_AUTH_URL, headers={"X-Session-ID": payload.session_id}
-        )
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid session_id")
-    data = r.json()
-    email = data.get("email")
-    name = data.get("name") or (email.split("@")[0] if email else "Guest")
-    picture = data.get("picture")
-    session_token = data.get("session_token")
-    if not email or not session_token:
-        raise HTTPException(status_code=401, detail="Malformed auth response")
+@router.post("/auth/google", response_model=AuthResponse)
+async def google_sign_in(payload: GoogleSignIn, request: Request):
+    """Exchange a Google ID token for an Explore91 session."""
+    rate_limit("google_auth", client_key(request), limit=20, window_sec=60)
+    claims = await _verify_google_id_token(payload.id_token)
+
+    email = claims.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Google token carries no email")
+    if claims.get("email_verified") is False:
+        raise HTTPException(status_code=401, detail="Google email is not verified")
+
+    name = claims.get("name") or email.split("@")[0]
+    picture = claims.get("picture")
+    session_token = f"g_{uuid.uuid4().hex}{uuid.uuid4().hex}"
 
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     now = datetime.now(timezone.utc)

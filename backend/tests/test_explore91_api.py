@@ -99,12 +99,22 @@ class TestBusinesses:
 
 # ---- Auth (unauthenticated) -----------------------------------------------
 class TestAuthUnauth:
-    def test_session_fake_id(self, api_client, base_url):
+    def test_google_rejects_bogus_token(self, api_client, base_url):
+        r = api_client.post(
+            f"{base_url}/api/auth/google",
+            json={"id_token": "not.a.real.token"},
+        )
+        # 401 once Google Sign-In is configured, 503 before then — either way a
+        # junk token never yields a session.
+        assert r.status_code in (401, 503)
+
+    def test_third_party_session_endpoint_is_gone(self, api_client, base_url):
+        """Login no longer routes through anyone else's server."""
         r = api_client.post(
             f"{base_url}/api/auth/session",
             json={"session_id": "fake_invalid_session_id_xxx"},
         )
-        assert r.status_code == 401
+        assert r.status_code == 404
 
     def test_me_without_token(self, api_client, base_url):
         r = api_client.get(f"{base_url}/api/auth/me")

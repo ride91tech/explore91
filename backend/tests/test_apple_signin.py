@@ -92,7 +92,7 @@ class TestAppleSignInErrorPaths:
         """3 base64url segments, header parses, but kid is bogus â†’ 401."""
         token = _make_fake_jwt(
             {"alg": "RS256", "kid": "definitely-not-a-real-kid-xyz", "typ": "JWT"},
-            {"iss": "https://appleid.apple.com", "aud": "com.emergent.exploremobile.j9fjag",
+            {"iss": "https://appleid.apple.com", "aud": "com.explore91.app",
              "sub": "0000.abcdef.0000", "iat": int(time.time()), "exp": int(time.time()) + 300},
         )
         r = self._post_token(token)
@@ -103,7 +103,7 @@ class TestAppleSignInErrorPaths:
     def test_missing_kid_returns_401(self):
         token = _make_fake_jwt(
             {"alg": "RS256", "typ": "JWT"},  # no kid
-            {"iss": "https://appleid.apple.com", "aud": "com.emergent.exploremobile.j9fjag",
+            {"iss": "https://appleid.apple.com", "aud": "com.explore91.app",
              "sub": "0000.abcdef.0000", "iat": int(time.time()), "exp": int(time.time()) + 300},
         )
         r = self._post_token(token)
@@ -197,7 +197,7 @@ class TestAppleSignInEnvAndIndex:
     def test_apple_audiences_env_contains_required_values(self):
         env = os.environ.get("APPLE_AUDIENCES", "")
         vals = {v.strip() for v in env.split(",") if v.strip()}
-        assert "com.emergent.exploremobile.j9fjag" in vals, env
+        assert "com.explore91.app" in vals, env
         assert "host.exp.Exponent" in vals, env
 
     def test_users_apple_sub_index_is_sparse_and_unique(self):
@@ -405,10 +405,10 @@ class TestRegressionSpotCheck:
         assert r.status_code == 200
         assert r.json().get("status") == "ok"
 
-    def test_session_endpoint_rejects_bad_session_id(self):
-        r = requests.post(f"{BASE_URL}/api/auth/session",
-                          json={"session_id": "not-a-real-session"}, timeout=15)
-        assert r.status_code == 401
+    def test_google_endpoint_rejects_bad_token(self):
+        r = requests.post(f"{BASE_URL}/api/auth/google",
+                          json={"id_token": "not-a-real-token"}, timeout=15)
+        assert r.status_code in (401, 503)
 
     def test_businesses_filter_by_city(self):
         r = requests.get(f"{BASE_URL}/api/businesses?city=goa&limit=20", timeout=15)

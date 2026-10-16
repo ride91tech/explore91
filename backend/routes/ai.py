@@ -1,9 +1,10 @@
-"""AI Concierge & Itinerary endpoints (Claude Sonnet 4.6 via emergentintegrations)."""
+"""AI Concierge & Itinerary endpoints, talking to Anthropic's API directly."""
 import json
 import os
 import re
 from typing import List
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core.db import db
@@ -12,19 +13,42 @@ from models import AIItineraryRequest, AIRecommendRequest
 
 router = APIRouter()
 
+ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+
 
 async def _ai_pick(system: str, user_prompt: str, session_id: str) -> str:
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    """One completion from Anthropic. `session_id` is kept for call-site
+    compatibility; these are single-turn prompts with no stored history."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="AI features aren't configured. Set ANTHROPIC_API_KEY.",
+        )
 
-    chat = LlmChat(
-        api_key=os.environ["EMERGENT_LLM_KEY"],
-        session_id=session_id,
-        system_message=system,
-    ).with_model("anthropic", "claude-sonnet-4-6")
-    resp = await chat.send_message(UserMessage(text=user_prompt))
-    if isinstance(resp, str):
-        return resp
-    return getattr(resp, "text", str(resp))
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            ANTHROPIC_API_URL,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": ANTHROPIC_MODEL,
+                "max_tokens": 1024,
+                "system": system,
+                "messages": [{"role": "user", "content": user_prompt}],
+            },
+        )
+
+    if r.status_code != 200:
+        logger.error("anthropic %s: %s", r.status_code, r.text[:300])
+        raise HTTPException(status_code=502, detail="AI service temporarily unavailable")
+
+    blocks = r.json().get("content", [])
+    return "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
 
 
 def _shortlist_for_ai(businesses: List[dict], limit: int = 30) -> List[dict]:
