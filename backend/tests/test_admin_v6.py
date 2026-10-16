@@ -82,7 +82,7 @@ def admin_ctx():
         await db.categories_cms.delete_many({"slug": {"$regex": "^yoga-studios-"}})
         await db.cities_cms.delete_many({"slug": {"$regex": "^testcity-"}})
         await db.banners.delete_many({"title": {"$regex": "^TEST_"}})
-        await db.fraud_flags.delete_many({"reason": "TEST v6 fraud"})
+        await db.fraud_flags.delete_many({"reason": {"$regex": "^TEST v6 fraud"}})
         await db.businesses.delete_many({"business_id": {"$regex": "^biz_TESTv6_"}})
         await db.reels.delete_many({"reel_id": {"$regex": "^reel_TESTv6_"}})
     _run(_clean())
@@ -395,38 +395,52 @@ class TestReelsModeration:
 # Support tickets
 # ============================================================================
 class TestTickets:
-    ticket_id = None
+    """Each test owns the ticket it asserts on.
 
-    def test_create_and_list_mine(self, customer_ctx):
-        r = requests.post(f"{BASE_URL}/api/tickets", headers=customer_ctx["H"],
-                          json={"subject": "TEST v6 issue", "message": "please help"}, timeout=15)
+    Previously a ticket_id was set by the first test and read by the next two,
+    so any run that did not execute them in order left the later ones
+    patching a ticket that was never created.
+    """
+
+    @pytest.fixture
+    def ticket(self, customer_ctx):
+        r = requests.post(
+            f"{BASE_URL}/api/tickets", headers=customer_ctx["H"],
+            json={"subject": f"TEST v6 issue {uuid.uuid4().hex[:8]}",
+                  "message": "please help"},
+            timeout=15,
+        )
         assert r.status_code == 200, r.text
-        tk = r.json()
-        assert tk["status"] == "open"
-        TestTickets.ticket_id = tk["ticket_id"]
+        ticket_id = r.json()["ticket_id"]
 
-        mine = requests.get(f"{BASE_URL}/api/tickets/mine", headers=customer_ctx["H"], timeout=15).json()
-        assert TestTickets.ticket_id in {x["ticket_id"] for x in mine}
+        yield ticket_id
 
-    def test_admin_list_and_status_filter(self, admin_ctx):
-        assert TestTickets.ticket_id
-        lst = requests.get(f"{BASE_URL}/api/admin/tickets", headers=admin_ctx["H"], timeout=15).json()
-        assert TestTickets.ticket_id in {x["ticket_id"] for x in lst}
+        async def _clean():
+            await _mongo().tickets.delete_many({"ticket_id": ticket_id})
+        _run(_clean())
+
+    def test_create_and_list_mine(self, customer_ctx, ticket):
+        mine = requests.get(f"{BASE_URL}/api/tickets/mine",
+                            headers=customer_ctx["H"], timeout=15).json()
+        assert ticket in {x["ticket_id"] for x in mine}
+        assert all(x["status"] in ("open", "pending", "resolved") for x in mine)
+
+    def test_admin_list_and_status_filter(self, admin_ctx, ticket):
+        lst = requests.get(f"{BASE_URL}/api/admin/tickets",
+                           headers=admin_ctx["H"], timeout=15).json()
+        assert ticket in {x["ticket_id"] for x in lst}
 
         open_only = requests.get(f"{BASE_URL}/api/admin/tickets?status=open",
                                  headers=admin_ctx["H"], timeout=15).json()
         assert all(x["status"] == "open" for x in open_only)
 
-    def test_admin_reply_and_resolve(self, admin_ctx):
-        r = requests.patch(f"{BASE_URL}/api/admin/tickets/{TestTickets.ticket_id}",
+    def test_admin_reply_and_resolve(self, admin_ctx, ticket):
+        r = requests.patch(f"{BASE_URL}/api/admin/tickets/{ticket}",
                            headers=admin_ctx["H"],
                            json={"admin_reply": "Hi", "status": "resolved"}, timeout=15)
-        assert r.status_code == 200
+        assert r.status_code == 200, r.text
         assert r.json()["status"] == "resolved"
         assert r.json()["admin_reply"] == "Hi"
-
-        # Cleanup this ticket so rate-limit test is unaffected by count
-        # (not required; just tidy)
 
     def test_rate_limit_5_per_min(self):
         # Fresh customer to avoid consuming other tests' budget
@@ -454,44 +468,58 @@ class TestTickets:
 # Fraud flags
 # ============================================================================
 class TestFraudFlags:
-    flag_id = None
+    """Each test owns the flag it asserts on.
 
-    def test_create_and_list(self, admin_ctx):
-        r = requests.post(f"{BASE_URL}/api/admin/flags", headers=admin_ctx["H"],
-                          json={"entity_type": "business", "entity_id": "biz_test_xxx",
-                                "reason": "TEST v6 fraud"}, timeout=15)
+    These used to hand a flag_id between tests through a class attribute, and
+    the last test deleted every flag sharing a fixed reason string. Any run
+    where that ordering did not hold — or where a concurrent worker swept the
+    same rows — left the later tests resolving a flag that no longer existed,
+    which is the 404 that made the suite flaky in parallel.
+    """
+
+    @pytest.fixture
+    def flag(self, admin_ctx):
+        """An open flag that belongs to this test alone."""
+        reason = f"TEST v6 fraud {uuid.uuid4().hex[:8]}"
+        r = requests.post(
+            f"{BASE_URL}/api/admin/flags", headers=admin_ctx["H"],
+            json={"entity_type": "business",
+                  "entity_id": f"biz_test_{uuid.uuid4().hex[:6]}",
+                  "reason": reason},
+            timeout=15,
+        )
         assert r.status_code == 200, r.text
-        TestFraudFlags.flag_id = r.json()["flag_id"]
+        flag_id = r.json()["flag_id"]
 
-        lst = requests.get(f"{BASE_URL}/api/admin/flags", headers=admin_ctx["H"], timeout=15).json()
-        assert TestFraudFlags.flag_id in {x["flag_id"] for x in lst}
+        yield flag_id
 
-    def test_status_open_filter(self, admin_ctx):
+        async def _clean():
+            await _mongo().fraud_flags.delete_many({"flag_id": flag_id})
+        _run(_clean())
+
+    def test_create_and_list(self, admin_ctx, flag):
+        lst = requests.get(f"{BASE_URL}/api/admin/flags",
+                           headers=admin_ctx["H"], timeout=15).json()
+        assert flag in {x["flag_id"] for x in lst}
+
+    def test_status_open_filter(self, admin_ctx, flag):
         lst = requests.get(f"{BASE_URL}/api/admin/flags?status=open",
                            headers=admin_ctx["H"], timeout=15).json()
         assert all(x["status"] == "open" for x in lst)
-        assert TestFraudFlags.flag_id in {x["flag_id"] for x in lst}
+        assert flag in {x["flag_id"] for x in lst}
 
-    def test_resolve(self, admin_ctx):
-        r = requests.patch(f"{BASE_URL}/api/admin/flags/{TestFraudFlags.flag_id}/resolve",
+    def test_resolve(self, admin_ctx, flag):
+        r = requests.patch(f"{BASE_URL}/api/admin/flags/{flag}/resolve",
                            headers=admin_ctx["H"], timeout=15)
-        assert r.status_code == 200
-        # verify persisted
+        assert r.status_code == 200, r.text
         lst = requests.get(f"{BASE_URL}/api/admin/flags?status=resolved",
                            headers=admin_ctx["H"], timeout=15).json()
-        assert TestFraudFlags.flag_id in {x["flag_id"] for x in lst}
+        assert flag in {x["flag_id"] for x in lst}
 
     def test_invalid_entity_type_422(self, admin_ctx):
         r = requests.post(f"{BASE_URL}/api/admin/flags", headers=admin_ctx["H"],
                           json={"entity_type": "hotel", "entity_id": "x", "reason": "y"}, timeout=15)
         assert r.status_code == 422
-
-    def test_cleanup_flag(self, admin_ctx):
-        # remove test flags from db so repeated runs stay clean
-        async def _clean():
-            db = _mongo()
-            await db.fraud_flags.delete_many({"reason": "TEST v6 fraud"})
-        _run(_clean())
 
 
 # ============================================================================

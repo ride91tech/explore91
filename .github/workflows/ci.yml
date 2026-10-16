@@ -9,19 +9,15 @@ name: CI
 #     database fails in ways the first did not. A throwaway service container
 #     sidesteps that, and it is also what roadmap 0.2 asks for in staging.
 #
-#   * The backend suite runs SERIALLY (-n 0). pytest.ini configures two xdist
-#     workers, but both share one database and several tests assert on global
-#     state, so the parallel run is flaky: three consecutive runs on a fresh
-#     database failed on three *different* tests. A flaky gate is worse than no
-#     gate, because people learn to ignore red. Serial is deterministic — three
-#     consecutive runs, 198 passed each — and takes under a minute.
-#     pytest.ini is left untouched; -n 0 is the override it documents.
-#
-#   * Three Apple sign-in tests are deselected BY NAME below. They fail only in
-#     serial mode and they fail identically on a clean checkout of HEAD with no
-#     local changes, so they are pre-existing and mode-specific, not a
-#     regression. They are excluded explicitly rather than hidden so the debt
-#     stays visible. Fixing test isolation is tracked as roadmap item 0.9.
+#   * The backend suite runs in the mode pytest.ini configures (-n 2
+#     --dist loadscope). It was pinned to serial with three Apple sign-in
+#     tests deselected, because the suite was not isolated: tests handed ids
+#     to each other, one swept every row matching a shared literal, and the
+#     app's Motor client was bound to a single event loop so running the app
+#     in-process under a second TestClient failed. Roadmap 0.9 fixed all
+#     three, and the suite now passes repeatedly in both modes with nothing
+#     excluded.
+
 
 on:
   push:
@@ -102,10 +98,7 @@ jobs:
 
       - name: Run the test suite
         working-directory: backend
-        # -n 0 overrides pytest.ini's two workers; see the note at the top.
-        # The three deselected tests are pre-existing serial-mode failures.
-        run: |
-          python -m pytest tests/ -q -n 0             --deselect tests/test_apple_signin.py::TestAppleSignInHappyPath::test_first_call_creates_user_with_500_wallet_and_apple_sub             --deselect tests/test_apple_signin.py::TestAppleSignInHappyPath::test_second_call_same_sub_reuses_user             --deselect tests/test_apple_signin.py::TestAppleSignInHappyPath::test_apple_sub_links_to_existing_email_user
+        run: python -m pytest tests/ -q
 
       - name: API log on failure
         if: failure()

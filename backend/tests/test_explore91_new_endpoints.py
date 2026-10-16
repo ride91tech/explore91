@@ -93,6 +93,46 @@ class TestOwnerPortal:
                             json={"role": "owner"}, headers=auth_headers)
         assert r.status_code == 200
 
+    @pytest.fixture
+    def owner_biz(self, api_client, auth_headers):
+        """A business owned by the test user, for this one test."""
+        payload = {
+            "name": "TEST_OwnerBiz_" + os.urandom(3).hex(),
+            "category": "cafes",
+            "city": "goa",
+            "address": "TEST street",
+            "description": "TEST owned-business fixture",
+            "price_range": "$$",
+            "tags": ["test"],
+            "booking_type": "instant",
+        }
+        r = api_client.post(f"{BASE_URL}/api/owner/businesses",
+                            json=payload, headers=auth_headers)
+        assert r.status_code == 200, r.text
+        biz_id = r.json()["business_id"]
+        yield biz_id
+        api_client.delete(f"{BASE_URL}/api/admin/businesses/{biz_id}",
+                          headers=auth_headers)
+
+    @pytest.fixture
+    def staff_member(self, api_client, auth_headers, owner_biz):
+        """A staff row on that business, named uniquely for this test.
+
+        The name is unique because the list assertion below used to look for a
+        fixed "TEST_Alice" created by a different test — which only held if the
+        two ran in order, on the same worker, in the same session.
+        """
+        name = "TEST_Staff_" + os.urandom(3).hex()
+        r = api_client.post(f"{BASE_URL}/api/owner/staff",
+                            json={"name": name, "role": "manager",
+                                  "business_id": owner_biz},
+                            headers=auth_headers)
+        assert r.status_code == 200, r.text
+        staff = r.json()
+        yield staff["staff_id"], name
+        api_client.delete(f"{BASE_URL}/api/owner/staff/{staff['staff_id']}",
+                          headers=auth_headers)
+
     def test_dashboard_shape(self, api_client, auth_headers):
         r = api_client.get(f"{BASE_URL}/api/owner/dashboard", headers=auth_headers)
         assert r.status_code == 200, r.text
@@ -103,7 +143,7 @@ class TestOwnerPortal:
         assert isinstance(data["businesses"], list)
         assert isinstance(data["recent_bookings"], list)
 
-    def test_create_business_and_not_in_public_list(self, api_client, auth_headers, request):
+    def test_create_business_and_not_in_public_list(self, api_client, auth_headers):
         payload = {
             "name": "TEST_OwnerBiz_" + os.urandom(3).hex(),
             "category": "cafes",
@@ -122,7 +162,6 @@ class TestOwnerPortal:
         assert biz["owner_id"], "owner_id should be set"
         assert "_id" not in biz
         biz_id = biz["business_id"]
-        request.config.cache.set("owner_biz_id", biz_id)
 
         # Should NOT appear in public list
         r2 = api_client.get(f"{BASE_URL}/api/businesses",
@@ -140,35 +179,31 @@ class TestOwnerPortal:
         owner_ids = {b.get("owner_id") for b in docs}
         assert len(owner_ids) == 1
 
-    def test_add_staff_valid_and_invalid(self, api_client, auth_headers, request):
-        biz_id = request.config.cache.get("owner_biz_id", None)
-        assert biz_id, "prior test must have set owner_biz_id"
-
-        # Valid
+    def test_add_staff_valid_and_invalid(self, api_client, auth_headers, owner_biz):
         r = api_client.post(f"{BASE_URL}/api/owner/staff",
                             json={"name": "TEST_Alice", "role": "manager",
-                                  "business_id": biz_id},
+                                  "business_id": owner_biz},
                             headers=auth_headers)
         assert r.status_code == 200, r.text
         staff = r.json()
         assert staff["staff_id"].startswith("st_")
-        request.config.cache.set("owner_staff_id", staff["staff_id"])
+        api_client.delete(f"{BASE_URL}/api/owner/staff/{staff['staff_id']}",
+                          headers=auth_headers)
 
-        # Invalid: business not owned
+        # A business this owner does not own.
         r2 = api_client.post(f"{BASE_URL}/api/owner/staff",
                              json={"name": "TEST_Bob", "role": "chef",
                                    "business_id": "biz_notmine_xyz"},
                              headers=auth_headers)
         assert r2.status_code == 404
 
-    def test_list_and_delete_staff(self, api_client, auth_headers, request):
+    def test_list_and_delete_staff(self, api_client, auth_headers, staff_member):
+        staff_id, name = staff_member
         r = api_client.get(f"{BASE_URL}/api/owner/staff", headers=auth_headers)
         assert r.status_code == 200
-        staff_list = r.json()
-        assert any(s["name"] == "TEST_Alice" for s in staff_list)
+        assert any(s["name"] == name for s in r.json())
 
-        sid = request.config.cache.get("owner_staff_id", None)
-        r2 = api_client.delete(f"{BASE_URL}/api/owner/staff/{sid}",
+        r2 = api_client.delete(f"{BASE_URL}/api/owner/staff/{staff_id}",
                                headers=auth_headers)
         assert r2.status_code == 200
         assert r2.json().get("ok") is True
@@ -182,6 +217,9 @@ class TestOwnerPortal:
 
 
 # --- Admin panel ---------------------------------------------------------
+
+
+
 class TestAdminPanel:
     def test_grant_admin_role(self, api_client, auth_headers, test_session):
         # SEC-001: admin is no longer self-serve — set it directly in Mongo

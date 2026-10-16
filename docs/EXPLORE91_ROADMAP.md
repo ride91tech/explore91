@@ -100,7 +100,7 @@ for what that assumes and where it is least reliable.
 | 0.6 | Indexes on `place_interest` and `reviews`; drop 9 unused backend deps | `explain()` shows index scans, not `COLLSCAN`; image size drops; suite still green |
 | 0.7 | CI running the test suite on every push | A PR with a failing test cannot merge green |
 | 0.8 | Decide the AI concierge: key it or remove the entry point | No user-facing button returns 502 |
-| 0.9 | **Fix test isolation** (added during Phase 0) | The suite passes repeatedly in the mode pytest.ini configures. Today two xdist workers share one database and several tests assert on global state, so three consecutive parallel runs on a fresh database failed on three *different* tests. CI runs serially with three Apple tests deselected as an interim; this item removes that workaround |
+| 0.9 | ~~**Fix test isolation**~~ **DONE** | The suite passes repeatedly in the mode pytest.ini configures. Done 2026-10-17 on `phase-0.9-test-isolation`: id handoffs replaced with per-test fixtures, the blanket row sweep removed, and the Motor client resolved per event loop. Suite now passes repeatedly in both modes with nothing excluded; the CI deselects are gone |
 
 **Exit:** deploying is routine rather than risky, and the three P0/P1 security
 findings from the audit are closed.
@@ -411,6 +411,65 @@ rollback is available and instant. Mobile rollback is not available at all.
 - **The first deploy after Phase 0.1 is the riskiest in the project** — it
   removes `/auth/session`. It gets the full gate sequence and a human watching
   auth success rate for an hour.
+
+---
+
+## 8a. Decisions taken (2026-10-17)
+
+Recorded here so the phases below are read against them.
+
+| # | Decision |
+|---|---|
+| **Visibility** | **Private by default** for journeys, saved places, collections and trips. Sharing is per-item and explicit. Group members see only what is shared with the group. |
+| **Handles** | **Assigned lazily**, when a public identity or sharing feature first needs one. No extra onboarding friction. Users can customise a handle later. |
+| **Invite preview (logged out)** | Trip name, destination, dates, itinerary and a general estimated budget, subject to the organiser's sharing settings. **Never** participant identities, private comments, personal expenses or profile information. Joining or editing requires authentication *and* authorisation. |
+| **Launch geography** | **Three properly populated cities**, not eleven thin ones. Architecture stays capable of all Indian cities. Candidates proposed in §8b. |
+| **Subscriptions** | Two tiers — Pro ₹1,499/month, Premium ₹9,999/month. Feature matrix to be prepared and approved before implementation. |
+| **GST** | Prices are **exclusive** of applicable GST for planning. Tax calculated and shown separately at checkout. Final treatment to be confirmed with an accountant before billing goes live. |
+
+Two consequences worth noting:
+
+- *Lazy handles* mean a user can reach a share action without an identity, so
+  handle assignment has to be an inline step inside the share flow, not a
+  separate screen. It also means handle uniqueness is enforced later, when
+  more users exist and good names are scarcer — allow editing, and reserve
+  nothing.
+- *Budget in the logged-out preview* is the one field that can leak more than
+  it looks: a per-person figure plus a visible participant count would imply
+  individual spend. Show a trip-level range only, never a per-head number.
+
+---
+
+## 8b. Proposed launch cities
+
+Current content, measured against production:
+
+| City | Places | Reels | State |
+|---|---|---|---|
+| Goa | 28 | 15 | Ready |
+| Ahmedabad | 26 | 9 | Ready |
+| Pune | 26 | **0** | Places only — no creator content |
+| Mumbai, Delhi, Jaipur, Udaipur, Varanasi, Leh, Kochi, Shillong | 0 | 0 | Empty |
+
+**Recommendation: Goa, Pune, Mumbai.**
+
+- **Goa** is not in question: the most content, the highest travel intent, and
+  the archetypal discovery destination.
+- **Mumbai** is the largest origin city in India for exactly the trips this
+  product plans. For a *collaborative trip planner*, the origin matters as
+  much as the destination — the group that plans a Goa weekend is usually
+  sitting in Mumbai.
+- **Pune** completes the Mumbai–Pune–Goa corridor, the most travelled weekend
+  route in the region, and it already has 26 places.
+
+The cost of that choice is content: Mumbai needs a full build, and Pune needs
+reels, which are the core mechanic. **If content for Mumbai cannot be funded
+before launch, swap it for Ahmedabad**, which is ready today at 26 places and
+9 reels — the trade is a weaker corridor story for a city that ships now.
+
+What this does *not* mean is launching a city empty. The eleven-city list
+exists today and eight of those cities are blank; whichever three are chosen
+should be the only ones offered until they have content.
 
 ---
 
