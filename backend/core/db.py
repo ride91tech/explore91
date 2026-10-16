@@ -23,6 +23,13 @@ from .config import DB_NAME, MONGO_URL
 # and harmless here: a handful in tests, exactly one in production.
 _clients: Dict[Optional[Any], AsyncIOMotorClient] = {}
 
+# The database handle is cached alongside the client. motor builds a fresh
+# wrapper object on every `client[name]`, and resolving it per attribute
+# access measured ~9us — small next to a network round-trip, but pure waste
+# repeated on every `db.<collection>` in the codebase. Caching it brings the
+# proxy back to roughly the cost of a dict lookup.
+_databases: Dict[Optional[Any], AsyncIOMotorDatabase] = {}
+
 
 def _current_loop() -> Optional[Any]:
     try:
@@ -34,12 +41,14 @@ def _current_loop() -> Optional[Any]:
 
 def _database() -> AsyncIOMotorDatabase:
     loop = _current_loop()
-    client = _clients.get(loop)
-    if client is None:
+    database = _databases.get(loop)
+    if database is None:
         # Constructed while this loop is running, so Motor binds to it.
         client = AsyncIOMotorClient(MONGO_URL)
         _clients[loop] = client
-    return client[DB_NAME]
+        database = client[DB_NAME]
+        _databases[loop] = database
+    return database
 
 
 class _DatabaseProxy:

@@ -50,9 +50,13 @@ jobs:
       # Never 'localhost': on some runners it resolves to ::1 first and each
       # new connection pays a ~2s fallback before reaching the IPv4 listener.
       TEST_BASE_URL: http://127.0.0.1:8000
-      # No proxy in front of the API in CI, so X-Forwarded-For is pure client
-      # input and must not be trusted. Production sets this to 1.
-      TRUSTED_PROXY_HOPS: "0"
+      # Matches production (Cloud Run behind one Google front end). There is
+      # no real proxy in CI, but the rate-limit regression tests simulate one
+      # by sending "<spoofed>, <real>" — which is the exact shape Cloud Run
+      # produces — so this is what exercises the production code path. With 0
+      # the limiter ignores X-Forwarded-For, every caller shares one bucket,
+      # and those tests cannot distinguish clients at all.
+      TRUSTED_PROXY_HOPS: "1"
       ADMIN_EMAILS: ci-admin@explore91.dev
 
     steps:

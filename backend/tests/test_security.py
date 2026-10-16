@@ -216,6 +216,12 @@ class TestSessionTokensHashedAtRest:
         assert r.status_code == 401
 
 
+@pytest.mark.skipif(
+    os.environ.get("TRUSTED_PROXY_HOPS", "1") == "0",
+    reason="with TRUSTED_PROXY_HOPS=0 the limiter ignores X-Forwarded-For, so "
+           "every caller shares one bucket and per-client budgets cannot be "
+           "distinguished",
+)
 class TestSEC003RateLimitBypass:
     """The limiter must not be defeatable by a header the caller controls.
 
@@ -358,10 +364,15 @@ class TestSEC003RateLimits:
             pytest.skip("No reels seeded")
         rid = reels[0]["reel_id"]
 
-        # 60/min per IP â†’ hammer 70 times
+        # Present as a distinct client. Without this the bucket is keyed on the
+        # shared loopback address, so any other test that views a reel at the
+        # same moment — on another xdist worker — spends this test's budget.
+        hdr = {"X-Forwarded-For": "198.51.100." + str(random.randint(2, 250))}
+
+        # 60/min per IP -> hammer 70 times
         statuses = []
         for i in range(70):
-            resp = api_client.post(f"{BASE_URL}/api/reels/{rid}/view")
+            resp = api_client.post(f"{BASE_URL}/api/reels/{rid}/view", headers=hdr)
             statuses.append(resp.status_code)
             if resp.status_code == 429:
                 assert "Retry-After" in resp.headers
