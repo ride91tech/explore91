@@ -17,7 +17,7 @@ async def create_ticket(
     request: Request,
     current=Depends(get_current_user),
 ):
-    rate_limit("ticket", client_key(request, current), limit=5, window_sec=60)
+    await rate_limit("ticket", client_key(request, current), limit=5, window_sec=60)
     doc = {
         "ticket_id": f"tk_{uuid.uuid4().hex[:10]}",
         "user_id": current["user_id"],

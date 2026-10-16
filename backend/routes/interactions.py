@@ -139,7 +139,7 @@ async def list_reviews(business_id: str):
 async def create_review(
     payload: ReviewCreate, request: Request, current=Depends(get_current_user)
 ):
-    rate_limit("review", client_key(request, current), limit=10, window_sec=60)
+    await rate_limit("review", client_key(request, current), limit=10, window_sec=60)
     review = {
         "review_id": f"rv_{uuid.uuid4().hex[:12]}",
         "user_id": current["user_id"],

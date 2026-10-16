@@ -149,6 +149,19 @@ async def ensure_indexes() -> None:
     await db.bookings.create_index([("created_at", -1), ("status", 1)])
     await db.saved.create_index("user_id", unique=True)
     await db.journey_visits.create_index([("user_id", 1), ("city_slug", 1)], unique=True)
+    # Place interest is read on the Trips tab, the reels feed and every place
+    # page. The unique pair enforces one row per (user, place) — the upsert in
+    # routes/places.py relies on that — and the second index serves the
+    # newest-first list, with `status` ahead of the sort key so the filtered
+    # and unfiltered lists both use it.
+    await db.place_interest.create_index(
+        [("user_id", 1), ("business_id", 1)], unique=True
+    )
+    await db.place_interest.create_index(
+        [("user_id", 1), ("status", 1), ("updated_at", -1)]
+    )
+    # Reviews are listed per business, newest first.
+    await db.reviews.create_index([("business_id", 1), ("created_at", -1)])
     await db.reels.create_index("reel_id", unique=True)
     await db.reels.create_index([("city", 1), ("created_at", -1)])
     await db.reel_likes.create_index([("reel_id", 1), ("user_id", 1)], unique=True)
@@ -164,3 +177,6 @@ async def ensure_indexes() -> None:
     await db.admin_audit.create_index("audit_id", unique=True)
     await db.admin_audit.create_index([("created_at", -1)])
     await db.admin_audit.create_index("entity_id")
+    # Rate-limit counters expire themselves; without this they accumulate one
+    # document per key per window forever.
+    await db.rate_limits.create_index("expires_at", expireAfterSeconds=0)

@@ -8,15 +8,19 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Build deps for the few wheels that need compiling (jq, cryptography fallbacks).
+# curl is for the healthcheck below. The compiler toolchain is deliberately
+# absent: every remaining dependency ships a manylinux wheel for CPython 3.12.
+# If a future dependency needs compiling, prefer a wheel over reinstating
+# build-essential - it was adding ~300MB to every build.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends build-essential curl \
+ && apt-get install -y --no-install-recommends curl \
  && rm -rf /var/lib/apt/lists/*
 
 # Requirements first so edits to app code don't invalidate the dependency layer.
+# requirements-dev.txt is intentionally NOT installed: tests, linters and type
+# checkers have no business in a production image.
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt \
- && apt-get purge -y build-essential && apt-get autoremove -y
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . .
 

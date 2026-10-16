@@ -73,7 +73,7 @@ async def ai_recommend(
     request: Request,
     current=Depends(get_current_user),
 ):
-    rate_limit("ai", client_key(request, current), limit=10, window_sec=60)
+    await rate_limit("ai", client_key(request, current), limit=10, window_sec=60)
     city = (payload.city or current.get("home_city") or "Goa").lower()
     docs = (
         await db.businesses.find(
@@ -132,7 +132,7 @@ async def ai_itinerary(
     request: Request,
     current=Depends(get_current_user),
 ):
-    rate_limit("ai", client_key(request, current), limit=10, window_sec=60)
+    await rate_limit("ai", client_key(request, current), limit=10, window_sec=60)
     city = (payload.city or current.get("home_city") or "Goa").lower()
     days = max(1, min(payload.days, 5))
     docs = (

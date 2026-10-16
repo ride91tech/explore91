@@ -1,6 +1,8 @@
 """Backend tests for Explore91 new endpoints (owner portal, admin, AI, roles, reviews)."""
 import os
 import time
+import uuid
+
 import pytest
 import requests
 
@@ -220,9 +222,37 @@ class TestAdminPanel:
         _, _, email = test_session
         assert any(u["email"] == email for u in users)
 
-    def test_pending_approve_and_public_visibility(self, api_client, auth_headers, request):
-        biz_id = request.config.cache.get("owner_biz_id", None)
-        assert biz_id
+    @pytest.fixture
+    def owned_biz(self, api_client, auth_headers):
+        """A fresh unapproved business for this one test.
+
+        These tests used to read an id out of `request.config.cache`, written
+        by a different test class. That is pytest's *cross-run* cache, so an
+        id survived into later runs after the business had been deleted, and
+        under `--dist loadscope` the writing and reading classes land on
+        different workers anyway. Each test now creates its own.
+        """
+        payload = {
+            "name": f"TEST admin fixture {uuid.uuid4().hex[:6]}",
+            "category": "restaurants",
+            "city": "goa",
+            "address": "TEST address",
+            "description": "TEST created by the admin-panel fixture",
+            "price_range": "$$",
+            "tags": ["test"],
+            "booking_type": "instant",
+        }
+        r = api_client.post(f"{BASE_URL}/api/owner/businesses",
+                            json=payload, headers=auth_headers)
+        assert r.status_code == 200, r.text
+        biz_id = r.json()["business_id"]
+        yield biz_id
+        # Best-effort cleanup; a test that deleted it already will 404 here.
+        api_client.delete(f"{BASE_URL}/api/admin/businesses/{biz_id}",
+                          headers=auth_headers)
+
+    def test_pending_approve_and_public_visibility(self, api_client, auth_headers, owned_biz):
+        biz_id = owned_biz
 
         # pending list should contain our unapproved biz
         r = api_client.get(f"{BASE_URL}/api/admin/businesses",
@@ -243,8 +273,8 @@ class TestAdminPanel:
                             params={"city": "goa", "limit": 100})
         assert biz_id in [b["business_id"] for b in r3.json()]
 
-    def test_feature_toggle_idempotent(self, api_client, auth_headers, request):
-        biz_id = request.config.cache.get("owner_biz_id", None)
+    def test_feature_toggle_idempotent(self, api_client, auth_headers, owned_biz):
+        biz_id = owned_biz
         r1 = api_client.patch(f"{BASE_URL}/api/admin/businesses/{biz_id}/feature",
                               headers=auth_headers)
         assert r1.status_code == 200
@@ -255,8 +285,8 @@ class TestAdminPanel:
         v2 = r2.json()["is_featured"]
         assert v1 != v2  # toggled
 
-    def test_delete_business(self, api_client, auth_headers, request):
-        biz_id = request.config.cache.get("owner_biz_id", None)
+    def test_delete_business(self, api_client, auth_headers, owned_biz):
+        biz_id = owned_biz
         r = api_client.delete(f"{BASE_URL}/api/admin/businesses/{biz_id}",
                               headers=auth_headers)
         assert r.status_code == 200
@@ -289,6 +319,10 @@ class TestReviews:
 
 
 # --- AI endpoints --------------------------------------------------------
+@pytest.mark.skipif(
+    not os.environ.get("ANTHROPIC_API_KEY"),
+    reason="ANTHROPIC_API_KEY is not set; the AI routes return 503/502 without it",
+)
 class TestAI:
     def test_recommend_requires_auth(self, api_client):
         r = api_client.post(f"{BASE_URL}/api/ai/recommend",

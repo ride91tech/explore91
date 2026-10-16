@@ -75,7 +75,7 @@ async def get_reel(reel_id: str):
 
 @router.post("/reels/{reel_id}/view")
 async def track_view(reel_id: str, request: Request):
-    rate_limit("reel_view", client_key(request), limit=60, window_sec=60)
+    await rate_limit("reel_view", client_key(request), limit=60, window_sec=60)
     r = await db.reels.update_one({"reel_id": reel_id}, {"$inc": {"views": 1}})
     if r.matched_count == 0:
         raise HTTPException(status_code=404, detail="Reel not found")

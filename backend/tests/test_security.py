@@ -1,5 +1,6 @@
 ﻿"""Security verification tests for Explore91 â€” SEC-001, SEC-002, SEC-003, and input validation."""
 import os
+import random
 import time
 import uuid
 import asyncio
@@ -161,6 +162,132 @@ class TestSEC002RegexSafety:
 
 
 # --- SEC-003: Rate limits -------------------------------------------------
+class TestSessionTokensHashedAtRest:
+    """A leak of user_sessions must not hand over working sessions."""
+
+    def test_stored_value_is_a_digest_not_the_token(self, api_client):
+        tok, uid, email = _seed_session(roles=["customer"])
+        try:
+            # Seeded rows start as raw tokens, the way every pre-existing
+            # session in production is stored. Using it once migrates it.
+            r = api_client.get(
+                f"{BASE_URL}/api/auth/me",
+                headers={"Authorization": f"Bearer {tok}"}, timeout=20,
+            )
+            assert r.status_code == 200, "a pre-hash session must keep working"
+
+            import hashlib
+
+            async def _read():
+                from motor.motor_asyncio import AsyncIOMotorClient
+                client = AsyncIOMotorClient(MONGO_URL)
+                db = client[DB_NAME]
+                raw = await db.user_sessions.find_one({"session_token": tok})
+                digest = await db.user_sessions.find_one(
+                    {"session_token": hashlib.sha256(tok.encode()).hexdigest()}
+                )
+                client.close()
+                return raw, digest
+
+            raw, digest = asyncio.get_event_loop().run_until_complete(_read())
+            assert raw is None, "the raw token is still stored after use"
+            assert digest is not None, "the session was not migrated to its digest"
+        finally:
+            _cleanup(uid, email)
+
+    def test_migrated_session_keeps_working(self, api_client):
+        """The upgrade happens mid-session; it must not sign the user out."""
+        tok, uid, email = _seed_session(roles=["customer"])
+        try:
+            h = {"Authorization": f"Bearer {tok}"}
+            first = api_client.get(f"{BASE_URL}/api/auth/me", headers=h, timeout=20)
+            second = api_client.get(f"{BASE_URL}/api/auth/me", headers=h, timeout=20)
+            assert first.status_code == 200
+            assert second.status_code == 200, "second call after migration failed"
+            assert first.json()["user_id"] == second.json()["user_id"]
+        finally:
+            _cleanup(uid, email)
+
+    def test_unknown_token_still_401(self, api_client):
+        r = api_client.get(
+            f"{BASE_URL}/api/auth/me",
+            headers={"Authorization": "Bearer not_a_real_token"}, timeout=20,
+        )
+        assert r.status_code == 401
+
+
+class TestSEC003RateLimitBypass:
+    """The limiter must not be defeatable by a header the caller controls.
+
+    X-Forwarded-For is *appended to* by each proxy, so its first entry is
+    simply whatever the client sent. The limiter used to key on that first
+    entry, which meant rotating a fake value per request bypassed it outright.
+    It now counts back TRUSTED_PROXY_HOPS from the end, so it reads the entry
+    our own infrastructure appended.
+
+    These tests send `<spoof>, <constant>` to imitate a proxy appending the
+    real address — which is exactly what Cloud Run does — and assert the
+    rotating prefix buys nothing.
+    """
+
+    LIMIT = 60          # /reels/{id}/view, per minute
+    OVERSHOOT = 70
+
+    @pytest.fixture(scope="class")
+    def reel_id(self, api_client):
+        r = api_client.get(f"{BASE_URL}/api/reels", params={"limit": 1}, timeout=20)
+        reels = r.json()
+        if not reels:
+            pytest.skip("no reels seeded")
+        return reels[0]["reel_id"]
+
+    @staticmethod
+    def _unique_ip():
+        """A fresh 'real' client address per test, so tests don't share a
+        bucket with each other or with a previous run in the same window."""
+        return "198.51.100." + str(random.randint(2, 250))
+
+    def _view(self, api_client, reel_id, xff):
+        return api_client.post(
+            f"{BASE_URL}/api/reels/{reel_id}/view",
+            headers={"X-Forwarded-For": xff},
+            timeout=20,
+        )
+
+    def test_rotating_spoofed_prefix_does_not_grant_a_fresh_budget(
+        self, api_client, reel_id
+    ):
+        real = self._unique_ip()
+        statuses = [
+            self._view(api_client, reel_id, f"203.0.113.{i % 250 + 1}, {real}").status_code
+            for i in range(self.OVERSHOOT)
+        ]
+        assert 429 in statuses, (
+            "a rotating X-Forwarded-For prefix bypassed the rate limit - the "
+            "limiter is keying on a client-controlled value again"
+        )
+        assert statuses[-1] == 429, "once tripped it should stay tripped in the window"
+
+    def test_separate_clients_keep_separate_budgets(self, api_client, reel_id):
+        """The fix must not over-correct into limiting everyone together."""
+        a, b = self._unique_ip(), self._unique_ip()
+        for i in range(self.OVERSHOOT):
+            self._view(api_client, reel_id, f"203.0.113.1, {a}")
+        # `a` is now limited; `b` should be untouched.
+        assert self._view(api_client, reel_id, f"203.0.113.1, {a}").status_code == 429
+        assert self._view(api_client, reel_id, f"203.0.113.1, {b}").status_code == 200
+
+    def test_429_carries_retry_after(self, api_client, reel_id):
+        real = self._unique_ip()
+        for i in range(self.OVERSHOOT):
+            r = self._view(api_client, reel_id, f"203.0.113.1, {real}")
+            if r.status_code == 429:
+                assert r.headers.get("Retry-After"), "429 must tell the caller when to retry"
+                assert 1 <= int(r.headers["Retry-After"]) <= 60
+                return
+        pytest.fail("never hit the rate limit")
+
+
 class TestSEC003RateLimits:
     @pytest.fixture(scope="class")
     def sess(self):

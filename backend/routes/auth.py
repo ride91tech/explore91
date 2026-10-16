@@ -25,6 +25,7 @@ from core.db import db
 from core.security import (
     client_key,
     get_current_user,
+    hash_session_token,
     logger,
     rate_limit,
 )
@@ -186,7 +187,7 @@ async def root():
 @router.post("/auth/google", response_model=AuthResponse)
 async def google_sign_in(payload: GoogleSignIn, request: Request):
     """Exchange a Google ID token for an Explore91 session."""
-    rate_limit("google_auth", client_key(request), limit=20, window_sec=60)
+    await rate_limit("google_auth", client_key(request), limit=20, window_sec=60)
     claims = await _verify_google_id_token(payload.id_token)
 
     email = claims.get("email")
@@ -223,7 +224,8 @@ async def google_sign_in(payload: GoogleSignIn, request: Request):
         user_doc.pop("_id", None)
 
     await db.user_sessions.insert_one({
-        "session_token": session_token,
+        # The digest, never the token — see core.security.hash_session_token.
+        "session_token": hash_session_token(session_token),
         "user_id": user_id,
         "created_at": now,
         "expires_at": now + timedelta(days=SESSION_TTL_DAYS),
@@ -239,7 +241,7 @@ async def me(current=Depends(get_current_user)):
 
 @router.post("/auth/apple", response_model=AuthResponse)
 async def apple_sign_in(payload: AppleSignInRequest, request: Request):
-    rate_limit("apple_signin", client_key(request), limit=20, window_sec=60)
+    await rate_limit("apple_signin", client_key(request), limit=20, window_sec=60)
     claims = await _verify_apple_identity_token(payload.identity_token)
     apple_sub = claims.get("sub")
     if not apple_sub:
@@ -296,7 +298,8 @@ async def apple_sign_in(payload: AppleSignInRequest, request: Request):
 
     session_token = f"apple_{uuid.uuid4().hex}"
     await db.user_sessions.insert_one({
-        "session_token": session_token,
+        # The digest, never the token — see core.security.hash_session_token.
+        "session_token": hash_session_token(session_token),
         "user_id": user_id,
         "created_at": now,
         "expires_at": now + timedelta(days=SESSION_TTL_DAYS),
@@ -309,7 +312,13 @@ async def apple_sign_in(payload: AppleSignInRequest, request: Request):
 async def logout(request: Request, current=Depends(get_current_user)):
     auth = request.headers.get("authorization", "")
     token = auth.split(" ", 1)[1].strip() if " " in auth else ""
-    await db.user_sessions.delete_one({"session_token": token})
+    # Delete by digest; fall back to the raw value for sessions issued before
+    # hashing, so logging out of an old session still works.
+    deleted = await db.user_sessions.delete_one(
+        {"session_token": hash_session_token(token)}
+    )
+    if deleted.deleted_count == 0:
+        await db.user_sessions.delete_one({"session_token": token})
     return {"ok": True}
 
 
