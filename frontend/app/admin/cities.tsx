@@ -6,13 +6,18 @@ import { colors, spacing, type as tType } from "@/src/theme";
 import { PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty, Card, Loading } from "@/src/components/admin/ui";
 import { useAsyncAction } from "@/src/components/admin/feedback";
 
-type City = { slug: string; name: string; tagline: string; image: string; source?: string };
+type City = {
+  slug: string; name: string; state?: string; region?: string;
+  tagline: string; image: string; source?: string;
+};
 
 export default function CitiesAdmin() {
   const [items, setItems] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
+  const [state, setState] = useState("");
+  const [region, setRegion] = useState("");
   const [tagline, setTagline] = useState("");
   const [image, setImage] = useState("");
   const { run, isBusy } = useAsyncAction();
@@ -34,9 +39,18 @@ export default function CitiesAdmin() {
           throw new Error("Slug must be lowercase letters, numbers or hyphens (2–32 chars).");
         }
         if (!name.trim() || !tagline.trim()) throw new Error("Name and tagline are both required.");
+        if (!state.trim()) throw new Error("State is required — it's what counts toward a traveller's journey.");
         if (!/^https:\/\//.test(image)) throw new Error("Image must be an https:// URL.");
-        await api("/admin/cities", { method: "POST", auth: true, body: JSON.stringify({ slug, name, tagline, image }) });
-        setSlug(""); setName(""); setTagline(""); setImage("");
+        await api("/admin/cities", {
+          method: "POST", auth: true,
+          body: JSON.stringify({
+            slug, name, tagline, image,
+            state: state.trim(),
+            // Blank region falls back to the state on the server.
+            region: region.trim() || null,
+          }),
+        });
+        setSlug(""); setName(""); setState(""); setRegion(""); setTagline(""); setImage("");
         await load();
       },
       "City launched — it's live in the app now."
@@ -64,6 +78,15 @@ export default function CitiesAdmin() {
           <TextInput placeholder="slug (e.g. bengaluru)" placeholderTextColor={colors.onSurfaceTertiary} value={slug} onChangeText={(s) => setSlug(s.toLowerCase())} style={[styles.input, { flex: 1 }]} />
           <TextInput placeholder="Display name" placeholderTextColor={colors.onSurfaceTertiary} value={name} onChangeText={setName} style={[styles.input, { flex: 1 }]} />
         </View>
+        <View style={[styles.form, { marginTop: 12 }]}>
+          <TextInput testID="city-state" placeholder="State or UT (e.g. Karnataka)" placeholderTextColor={colors.onSurfaceTertiary} value={state} onChangeText={setState} style={[styles.input, { flex: 1 }]} />
+          <TextInput testID="city-region" placeholder="Picker heading (blank = state)" placeholderTextColor={colors.onSurfaceTertiary} value={region} onChangeText={setRegion} style={[styles.input, { flex: 1 }]} />
+        </View>
+        <Text style={styles.subhint}>
+          State counts toward a traveller&apos;s states-visited total. The heading is
+          only how the city is grouped in the picker — Goa sits under &ldquo;West Coast&rdquo;,
+          Delhi under &ldquo;Capital Region&rdquo;.
+        </Text>
         <TextInput placeholder="Tagline (e.g. Silicon Valley of India)" placeholderTextColor={colors.onSurfaceTertiary} value={tagline} onChangeText={setTagline} style={[styles.input, { marginTop: 12 }]} />
         <TextInput placeholder="Hero image URL (https://…)" placeholderTextColor={colors.onSurfaceTertiary} value={image} onChangeText={setImage} style={[styles.input, { marginTop: 12 }]} />
         <View style={{ marginTop: 12, alignItems: "flex-start" }}>
@@ -75,17 +98,23 @@ export default function CitiesAdmin() {
         <Loading label="Loading cities…" />
       ) : (
         <Table>
-          <TableHead cols={[{ label: "City", width: 3 }, { label: "Slug", width: 1 }, { label: "Tagline", width: 3 }, { label: "Source", width: 1 }, { label: "Actions", width: 1 }]} />
+          <TableHead cols={[{ label: "City", width: 2.6 }, { label: "State", width: 1.4 }, { label: "Picker heading", width: 1.4 }, { label: "Tagline", width: 2.4 }, { label: "Source", width: 1 }, { label: "Actions", width: 1 }]} />
           {items.length === 0 ? <Empty /> : items.map((c) => (
             <TableRow key={c.slug}>
-              <Cell width={3}>
+              <Cell width={2.6}>
                 <View style={styles.row}>
                   <Image source={{ uri: c.image }} style={styles.thumb} contentFit="cover" />
-                  <Text style={styles.cityName}>{c.name}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cityName}>{c.name}</Text>
+                    <Text style={styles.slug}>{c.slug}</Text>
+                  </View>
                 </View>
               </Cell>
-              <Cell width={1}><Text style={styles.slug}>{c.slug}</Text></Cell>
-              <Cell width={3}>{c.tagline}</Cell>
+              <Cell width={1.4}>
+                {c.state ? c.state : <Text style={styles.missing}>Not set</Text>}
+              </Cell>
+              <Cell width={1.4}>{c.region || c.state || "—"}</Cell>
+              <Cell width={2.4}>{c.tagline}</Cell>
               <Cell width={1}><Pill label={c.source === "cms" ? "Custom" : "Built-in"} tone={c.source === "cms" ? "brand" : "neutral"} /></Cell>
               <Cell width={1}>
                 {c.source === "cms" ? (
@@ -111,6 +140,8 @@ const styles = StyleSheet.create({
   thumb: { width: 60, height: 40, borderRadius: 6, backgroundColor: colors.surfaceTertiary },
   cityName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
   slug: { fontFamily: "monospace", fontSize: tType.sm, color: colors.onSurface },
+  missing: { fontSize: tType.sm, color: colors.warning, fontStyle: "italic" },
+  subhint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 8, lineHeight: 19 },
   readonly: { fontSize: tType.sm, color: colors.onSurfaceTertiary, fontStyle: "italic" },
   err: { color: colors.error, marginTop: 12, fontSize: tType.sm },
 });

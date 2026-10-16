@@ -1,13 +1,49 @@
 """Static catalog & seed content for Explore91."""
 
+# `state` is the canonical state/UT and drives the journey tracker's
+# states-visited count. `region` is the label shown above the city in the
+# picker, which isn't always the state — Goa reads better as "West Coast" and
+# Delhi as "Capital Region".
 CITIES = [
-    {"slug": "goa", "name": "Goa", "tagline": "Sun, sand & endless nights",
+    {"slug": "goa", "name": "Goa", "state": "Goa", "region": "West Coast",
+     "tagline": "Sun, sand & endless nights",
      "image": "https://images.unsplash.com/photo-1685271552630-9bc169185566?crop=entropy&cs=srgb&fm=jpg&w=1200&q=85"},
-    {"slug": "ahmedabad", "name": "Ahmedabad", "tagline": "Heritage meets modern",
+    {"slug": "ahmedabad", "name": "Ahmedabad", "state": "Gujarat", "region": "Gujarat",
+     "tagline": "Heritage meets modern",
      "image": "https://images.unsplash.com/photo-1687840430404-b82859282de4?w=1200&q=85"},
-    {"slug": "pune", "name": "Pune", "tagline": "The city that never sleeps",
+    {"slug": "pune", "name": "Pune", "state": "Maharashtra", "region": "Maharashtra",
+     "tagline": "The city that never sleeps",
      "image": "https://images.unsplash.com/photo-1553064483-f10fe837615f?w=1200&q=85"},
+    {"slug": "jaipur", "name": "Jaipur", "state": "Rajasthan", "region": "Rajasthan",
+     "tagline": "The pink city, in full colour",
+     "image": "https://images.unsplash.com/photo-1477587458883-47145ed94245?w=1200&q=85"},
+    {"slug": "udaipur", "name": "Udaipur", "state": "Rajasthan", "region": "Rajasthan",
+     "tagline": "Palaces on still water",
+     "image": "https://images.unsplash.com/photo-1609920658906-8223bd289001?w=1200&q=85"},
+    {"slug": "mumbai", "name": "Mumbai", "state": "Maharashtra", "region": "Maharashtra",
+     "tagline": "The city that never sleeps",
+     "image": "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=1200&q=85"},
+    {"slug": "varanasi", "name": "Varanasi", "state": "Uttar Pradesh", "region": "Uttar Pradesh",
+     "tagline": "Where the ghats meet dawn",
+     "image": "https://images.unsplash.com/photo-1561361058-c24cecae35ca?w=1200&q=85"},
+    {"slug": "leh", "name": "Leh", "state": "Ladakh", "region": "Ladakh",
+     "tagline": "High passes and bluer skies",
+     "image": "https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?w=1200&q=85"},
+    {"slug": "kochi", "name": "Kochi", "state": "Kerala", "region": "Kerala",
+     "tagline": "Spice routes and backwaters",
+     "image": "https://images.unsplash.com/photo-1590123717837-32e46e7e9e1e?w=1200&q=85"},
+    {"slug": "shillong", "name": "Shillong", "state": "Meghalaya", "region": "Meghalaya",
+     "tagline": "Clouds, pines and living roots",
+     "image": "https://images.unsplash.com/photo-1558431382-27e303142255?w=1200&q=85"},
+    {"slug": "delhi", "name": "Delhi", "state": "Delhi", "region": "Capital Region",
+     "tagline": "Seven cities, one capital",
+     "image": "https://images.unsplash.com/photo-1587474260584-136574528ed5?w=1200&q=85"},
 ]
+
+# Denominator for the journey tracker's "% of India" figure: 28 states + 8
+# union territories. Coverage is measured against the whole country, not just
+# the cities currently listed, so the number stays honest as cities are added.
+INDIA_STATE_COUNT = 36
 
 CATEGORIES = [
     {"slug": "restaurants", "name": "Restaurants", "icon": "restaurant-outline"},

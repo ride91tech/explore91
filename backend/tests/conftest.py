@@ -22,9 +22,31 @@ sys.path.insert(0, BACKEND_DIR)
 load_dotenv(os.path.join(REPO_DIR, "frontend", ".env"))
 load_dotenv(os.path.join(BACKEND_DIR, ".env"))
 
-BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "").rstrip("/")
+# The suite drives the API over HTTP while seeding fixtures straight into Mongo,
+# so both must address the same deployment. frontend/.env is the mobile app's
+# backend URL and legitimately points at production, so taking BASE_URL from it
+# would aim destructive admin tests at live data. TEST_BASE_URL overrides it;
+# otherwise default to localhost.
+BASE_URL = (
+    os.environ.get("TEST_BASE_URL")
+    or "http://localhost:8000"
+).rstrip("/")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
+
+# Refuse to run against anything but a local deployment unless explicitly
+# allowed. These tests create admin sessions and delete businesses, reels and
+# users; pointed at production they would destroy real data.
+if not (
+    BASE_URL.startswith("http://localhost")
+    or BASE_URL.startswith("http://127.0.0.1")
+    or os.environ.get("ALLOW_REMOTE_TESTS") == "1"
+):
+    raise RuntimeError(
+        f"Refusing to run the test suite against {BASE_URL}.\n"
+        "These tests delete data. Run them against a local server, or set "
+        "ALLOW_REMOTE_TESTS=1 if you genuinely mean to target a remote one."
+    )
 
 
 @pytest.fixture(scope="session")

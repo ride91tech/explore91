@@ -1,0 +1,26 @@
+# What NOT to upload to Cloud Build.
+#
+# gcloud reads this file, not .dockerignore. Without it the local virtualenv
+# (~300MB) gets uploaded on every deploy, which is slow and pointless — the
+# image installs its own dependencies from requirements.txt.
+
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Secrets never belong in a build context.
+.env
+.env.*
+!.env.example
+
+# Tests run in CI, not in the runtime image.
+tests/
+
+.git/
+.gitignore
+*.md
+deploy/

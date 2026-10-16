@@ -148,6 +148,7 @@ async def ensure_indexes() -> None:
     await db.bookings.create_index("business_id")
     await db.bookings.create_index([("created_at", -1), ("status", 1)])
     await db.saved.create_index("user_id", unique=True)
+    await db.journey_visits.create_index([("user_id", 1), ("city_slug", 1)], unique=True)
     await db.reels.create_index("reel_id", unique=True)
     await db.reels.create_index([("city", 1), ("created_at", -1)])
     await db.reel_likes.create_index([("reel_id", 1), ("user_id", 1)], unique=True)

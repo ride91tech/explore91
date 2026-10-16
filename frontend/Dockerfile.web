@@ -1,0 +1,11 @@
+# Serves the Expo web export (admin console + customer web app) as a static site.
+# Built separately with `npx expo export -p web`, which bakes
+# EXPO_PUBLIC_BACKEND_URL into the bundle at build time.
+FROM nginx:1.27-alpine
+
+COPY dist/ /usr/share/nginx/html/
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+
+# Cloud Run supplies PORT; nginx's entrypoint substitutes it into the template.
+ENV PORT=8080
+EXPOSE 8080

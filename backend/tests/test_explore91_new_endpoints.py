@@ -4,7 +4,9 @@ import time
 import pytest
 import requests
 
-BASE_URL = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/")
+# Same guard as conftest: never let the mobile app's production URL aim
+# these destructive tests at live data.
+BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://localhost:8000").rstrip("/")
 
 
 # --- Regression: previously-passing endpoints -----------------------------

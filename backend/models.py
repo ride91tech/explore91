@@ -110,6 +110,10 @@ class SavedToggle(BaseModel):
     business_id: str
 
 
+class JourneyMark(BaseModel):
+    city_slug: str = Field(pattern="^[a-z0-9-]{2,32}$")
+
+
 class Review(BaseModel):
     review_id: str
     user_id: str
@@ -143,6 +147,10 @@ class CategoryUpsert(BaseModel):
 class CityUpsert(BaseModel):
     slug: str = Field(pattern="^[a-z0-9-]{2,32}$")
     name: str = Field(min_length=1, max_length=48)
+    # Canonical state/UT — counted by the journey tracker.
+    state: str = Field(min_length=1, max_length=48)
+    # Label shown above the city in the picker; defaults to the state.
+    region: Optional[str] = Field(default=None, max_length=48)
     tagline: str = Field(min_length=1, max_length=140)
     image: str = Field(min_length=8, max_length=500)
 

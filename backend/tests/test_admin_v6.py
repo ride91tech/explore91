@@ -25,7 +25,9 @@ _REPO_DIR = os.path.dirname(_BACKEND_DIR)
 load_dotenv(os.path.join(_REPO_DIR, "frontend", ".env"))
 load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
-BASE_URL = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/")
+# Same guard as conftest: never let the mobile app's production URL aim
+# these destructive tests at live data.
+BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://localhost:8000").rstrip("/")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
@@ -163,6 +165,7 @@ class TestCitiesCMS:
         slug = f"testcity-{uuid.uuid4().hex[:4]}"
         payload = {
             "slug": slug, "name": "Test City",
+            "state": "Test State",
             "tagline": "For testing",
             "image": "https://images.unsplash.com/photo-1.jpg",
         }

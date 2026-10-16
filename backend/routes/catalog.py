@@ -10,11 +10,37 @@ from seed.data import CATEGORIES, CITIES
 router = APIRouter()
 
 
+def _with_region(city: dict) -> dict:
+    """Cities added before the geography fields existed have neither."""
+    state = city.get("state") or ""
+    return {**city, "state": state, "region": city.get("region") or state}
+
+
 @router.get("/cities")
 async def get_cities():
     custom = await db.cities_cms.find({}, {"_id": 0}).to_list(200)
     known = {c["slug"] for c in custom}
-    return [c for c in CITIES if c["slug"] not in known] + custom
+    merged = [c for c in CITIES if c["slug"] not in known] + custom
+    return [_with_region(c) for c in merged]
+
+
+@router.get("/cities/grouped")
+async def get_cities_grouped():
+    """Cities bucketed by region, for the city picker.
+
+    Regions are ordered by how many cities they hold, then alphabetically, so
+    the picker stays stable as cities are added.
+    """
+    cities = await get_cities()
+    buckets: dict = {}
+    for c in cities:
+        buckets.setdefault(c["region"] or "Other", []).append(c)
+    return [
+        {"region": region, "cities": sorted(items, key=lambda c: c["name"])}
+        for region, items in sorted(
+            buckets.items(), key=lambda kv: (-len(kv[1]), kv[0])
+        )
+    ]
 
 
 @router.get("/categories")

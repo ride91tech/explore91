@@ -7,7 +7,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from core import db as core_db
 from core.config import ALLOWED_ORIGINS
-from routes import admin, ai, auth, catalog, interactions, portal, reels, tickets
+from routes import admin, ai, auth, catalog, interactions, journey, portal, reels, tickets
 from seed.seed import ensure_indexes, seed_data
 
 logging.basicConfig(
@@ -34,6 +34,7 @@ api = APIRouter(prefix="/api")
 api.include_router(auth.router)
 api.include_router(catalog.router)
 api.include_router(interactions.router)
+api.include_router(journey.router)
 api.include_router(portal.router)
 api.include_router(admin.router)
 api.include_router(ai.router)

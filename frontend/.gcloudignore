@@ -1,0 +1,27 @@
+# Upload only the built static site and its container config.
+# node_modules is ~1GB and android/ is the prebuild output — neither belongs
+# in the build context. gcloud reads this file, not .dockerignore.
+
+node_modules/
+android/
+ios/
+.expo/
+.metro-cache/
+.git/
+
+app/
+src/
+assets/
+scripts/
+constants/
+plugins/
+
+*.md
+.env
+.env.*
+!.env.example
+package-lock.json
+tsconfig.json
+eslint.config.js
+metro.config.js
+app.json
