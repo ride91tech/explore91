@@ -12,6 +12,7 @@ from routes import (
     tickets,
 )
 from seed.seed import ensure_indexes, seed_data
+from web import pages as web_pages
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +47,11 @@ api.include_router(reels.router)
 api.include_router(tickets.router)
 
 app.include_router(api)
+
+# Public server-rendered pages, mounted at the root: /place/..., /city/...,
+# /sitemap.xml, /robots.txt. Registered after the API router so nothing here
+# can shadow an /api path.
+app.include_router(web_pages.router)
 
 app.add_middleware(
     CORSMiddleware,

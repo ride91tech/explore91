@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from core.db import db
+from core.slug import unique_slug
 from core.security import logger
 from .data import (
     CITY_COORDS,
@@ -51,6 +52,36 @@ async def seed_reels() -> None:
     logger.info("Seeded %s reels", len(docs))
 
 
+async def backfill_slugs() -> None:
+    """Give every place a public URL slug.
+
+    Runs on each boot and is a no-op once filled. Slugs are assigned one at a
+    time rather than in bulk because each has to be checked against the ones
+    already taken, including the ones assigned moments earlier in this loop.
+    """
+    cursor = db.businesses.find(
+        {"$or": [{"slug": {"$exists": False}}, {"slug": None}, {"slug": ""}]},
+        {"_id": 0, "business_id": 1, "name": 1, "city": 1},
+    )
+    filled = 0
+    async for biz in cursor:
+        async def taken(candidate: str) -> bool:
+            return await db.businesses.count_documents(
+                {"slug": candidate}, limit=1
+            ) > 0
+
+        slug = await unique_slug(
+            biz.get("name"), biz.get("city"),
+            exists=taken, fallback=biz["business_id"],
+        )
+        await db.businesses.update_one(
+            {"business_id": biz["business_id"]}, {"$set": {"slug": slug}}
+        )
+        filled += 1
+    if filled:
+        logger.info("Backfilled %s business slugs", filled)
+
+
 async def seed_data() -> None:
     # Ensure all pre-existing seeded businesses have is_approved + owner_id
     await db.businesses.update_many(
@@ -60,6 +91,7 @@ async def seed_data() -> None:
     count = await db.businesses.count_documents({})
     if count > 0:
         logger.info("Seed skipped — %s businesses already present", count)
+        await backfill_slugs()
         await seed_reels()
         return
     docs = []
@@ -129,6 +161,7 @@ async def seed_data() -> None:
         })
     await db.businesses.insert_many(docs)
     logger.info("Seeded %s businesses", len(docs))
+    await backfill_slugs()
     await seed_reels()
 
 
@@ -140,6 +173,8 @@ async def ensure_indexes() -> None:
     await db.user_sessions.create_index("user_id")
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     await db.businesses.create_index("business_id", unique=True)
+    # Sparse: a doc is briefly slug-less between insert and backfill.
+    await db.businesses.create_index("slug", unique=True, sparse=True)
     await db.businesses.create_index([("city", 1), ("category", 1)])
     await db.businesses.create_index("owner_id")
     await db.businesses.create_index("is_approved")

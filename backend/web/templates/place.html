@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+  <p class="kicker">{{ place.area or place.address or place.city|title }}</p>
+  <h1>{{ place.name }}</h1>
+  <p class="meta">
+    {% if place.rating %}&#9733; {{ "%.1f"|format(place.rating) }}{% endif %}
+    {%- if place.review_count %} &middot; {{ "{:,}".format(place.review_count) }} reviews{% endif %}
+    {%- if place.price_range %} &middot; {{ place.price_range }}{% endif %}
+    {%- if category_name %} &middot; {{ category_name }}{% endif %}
+  </p>
+
+  {% if place.cover_image %}
+    <img class="hero" src="{{ place.cover_image }}" alt="{{ place.name }}" loading="lazy">
+  {% endif %}
+
+  {% if place.tags %}
+    <ul class="tags">{% for t in place.tags %}<li>{{ t }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if why_go %}
+    <h2>Why go</h2>
+    <p>{{ why_go }}</p>
+  {% endif %}
+
+  {% if place.open_hours %}
+    <h2>Hours</h2>
+    <p class="meta">{{ place.open_hours }}</p>
+  {% endif %}
+
+  {% if nearby %}
+    <h2>While you're here</h2>
+    {% for n in nearby %}
+      <a class="card" href="/place/{{ n.slug }}">
+        <div class="name">{{ n.name }}</div>
+        <div class="sub">{{ n.category|replace('-', ' ')|title }} &middot; {{ n.address }}</div>
+      </a>
+    {% endfor %}
+  {% endif %}
+
+  <h2>More in {{ city_name }}</h2>
+  <p><a href="/city/{{ place.city }}">Browse {{ city_name }} on Explore91</a></p>
+{% endblock %}

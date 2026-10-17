@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.db import db
+from core.slug import unique_slug
 from core.security import get_current_user, require_role
 from models import BusinessCreate, StaffCreate
 from seed.data import CITY_COORDS, SAMPLE_IMAGES
@@ -86,6 +87,16 @@ async def owner_create_business(
         "services": [],
         "booking_type": payload.booking_type,
     }
+
+    # Public URL slug, assigned at creation so the place is shareable the
+    # moment it is approved rather than waiting for the next boot's backfill.
+    async def taken(candidate: str) -> bool:
+        return await db.businesses.count_documents({"slug": candidate}, limit=1) > 0
+
+    doc["slug"] = await unique_slug(
+        doc["name"], doc["city"], exists=taken, fallback=doc["business_id"]
+    )
+
     await db.businesses.insert_one(dict(doc))
     doc.pop("_id", None)
     return doc

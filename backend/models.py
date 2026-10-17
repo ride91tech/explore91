@@ -42,6 +42,9 @@ class RoleUpgrade(BaseModel):
 # --- Catalog ---------------------------------------------------------------
 class Business(BaseModel):
     business_id: str
+    # Public URL slug, e.g. /place/casa-sarita-goa. Optional on the model
+    # because a document is briefly slug-less between insert and backfill.
+    slug: Optional[str] = None
     name: str
     category: str
     city: str

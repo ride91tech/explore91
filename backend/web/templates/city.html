@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+  <p class="kicker">{{ city.state or city.region or "India" }}</p>
+  <h1>{{ city.name }}</h1>
+  <p class="meta">{{ city.tagline }}</p>
+
+  {% if city.image %}
+    <img class="hero" src="{{ city.image }}" alt="{{ city.name }}" loading="lazy">
+  {% endif %}
+
+  {% if places %}
+    <h2>{{ places|length }} place{{ '' if places|length == 1 else 's' }} in {{ city.name }}</h2>
+    {% for p in places %}
+      <a class="card" href="/place/{{ p.slug }}">
+        <div class="name">{{ p.name }}</div>
+        <div class="sub">
+          {{ p.category|replace('-', ' ')|title }}
+          {%- if p.address %} &middot; {{ p.address }}{% endif %}
+          {%- if p.rating %} &middot; &#9733; {{ "%.1f"|format(p.rating) }}{% endif %}
+        </div>
+      </a>
+    {% endfor %}
+  {% else %}
+    <h2>Coming soon</h2>
+    <p class="meta">
+      We're still curating {{ city.name }}. Nothing is listed here yet.
+    </p>
+  {% endif %}
+{% endblock %}

@@ -25,5 +25,10 @@ cryptography>=42.0.8
 # Multipart form parsing for FastAPI.
 python-multipart>=0.0.9
 
+# Server-rendered public pages (place/city pages, link previews, sitemap).
+# These must be real HTML in the response body: a crawler or a WhatsApp
+# preview fetcher does not run JavaScript.
+jinja2>=3.1.4
+
 # IANA timezone data; the slim base image ships none.
 tzdata>=2024.2
