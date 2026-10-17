@@ -15,6 +15,7 @@ Covers:
 import os
 import json
 import time
+import random
 import uuid
 import base64
 import asyncio
@@ -43,6 +44,20 @@ MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
 APPLE_ENDPOINT = f"{BASE_URL}/api/auth/apple"
+
+def _as_fresh_client() -> dict:
+    """Headers presenting this call as a distinct client.
+
+    /auth/apple is limited to 20 requests per minute per caller. Every test
+    here used to arrive as the same loopback address, so the file sat right on
+    that limit and two runs inside one window pushed it over — the limiter
+    returned 429 where the test expected 401. Each call now looks like its own
+    client. TRUSTED_PROXY_HOPS=1 means the limiter reads the last entry, which
+    is what a proxy would have appended.
+    """
+    return {"X-Forwarded-For": "198.51.100." + str(random.randint(2, 250))}
+
+
 
 
 def _b64url(data: bytes) -> str:
@@ -181,7 +196,8 @@ class TestAppleSignInAudienceCheck:
         )
 
         with TestClient(app_env.app) as client:
-            r = client.post("/api/auth/apple", json={"identity_token": token})
+            r = client.post("/api/auth/apple", json={"identity_token": token},
+                            headers=_as_fresh_client())
         # Rate limit could kick in if run right after error-paths test; accept 401 or 429
         if r.status_code == 429:
             pytest.skip("shared IP bucket exhausted; aud check is exercised in the code path")
@@ -305,7 +321,8 @@ class TestAppleSignInHappyPath:
         from routes import auth as auth_mod
         auth_mod._verify_apple_identity_token = fake_verify
         r = client.post("/api/auth/apple",
-                        json={"identity_token": "x" * 20, "full_name": "Apple New"})
+                        json={"identity_token": "x" * 20, "full_name": "Apple New"},
+                        headers=_as_fresh_client())
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["session_token"].startswith("apple_")
@@ -332,11 +349,13 @@ class TestAppleSignInHappyPath:
         auth_mod._verify_apple_identity_token = fake_verify
 
         r1 = client.post("/api/auth/apple",
-                         json={"identity_token": "x" * 20, "full_name": "Apple Reuse"})
+                         json={"identity_token": "x" * 20, "full_name": "Apple Reuse"},
+                         headers=_as_fresh_client())
         assert r1.status_code == 200, r1.text
         uid1 = r1.json()["user"]["user_id"]
 
-        r2 = client.post("/api/auth/apple", json={"identity_token": "x" * 20})
+        r2 = client.post("/api/auth/apple", json={"identity_token": "x" * 20},
+                         headers=_as_fresh_client())
         assert r2.status_code == 200, r2.text
         uid2 = r2.json()["user"]["user_id"]
 
@@ -378,7 +397,8 @@ class TestAppleSignInHappyPath:
         from routes import auth as auth_mod
         auth_mod._verify_apple_identity_token = fake_verify
 
-        r = client.post("/api/auth/apple", json={"identity_token": "x" * 20})
+        r = client.post("/api/auth/apple", json={"identity_token": "x" * 20},
+                        headers=_as_fresh_client())
         assert r.status_code == 200, r.text
         assert r.json()["user"]["user_id"] == existing_uid
         assert r.json()["user"]["apple_sub"] == sub
