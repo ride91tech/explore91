@@ -21,6 +21,7 @@ import * as Haptics from "expo-haptics";
 import { api, Business, InterestStatus } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { useAuth } from "@/src/auth";
+import { placeUrl, shareContent } from "@/src/links";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
 
 type ReviewT = {
@@ -82,9 +83,13 @@ export default function BusinessDetail() {
   const share = async () => {
     if (!biz) return;
     try {
-      await Share.share({
-        message: `${biz.name} — ${biz.address}\nFound on Explore91`,
-      });
+      const where = biz.area || biz.address || "";
+      await Share.share(
+        shareContent(
+          where ? `${biz.name} — ${where}` : biz.name,
+          placeUrl(biz.slug)
+        )
+      );
     } catch {
       show("Couldn't open sharing. Try again.", "error");
     }

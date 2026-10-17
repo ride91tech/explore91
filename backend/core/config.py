@@ -45,3 +45,34 @@ ALLOWED_ORIGINS = [
     for o in (os.environ.get("ALLOWED_ORIGINS", "") or "").split(",")
     if o.strip()
 ] or ["*"]
+
+
+# --- Deep links -----------------------------------------------------------
+# Serving /.well-known/assetlinks.json and apple-app-site-association is what
+# lets a tapped https://explore91.com/place/... open the app instead of a
+# browser tab. Both files are public by design; the values below are app
+# identifiers and certificate fingerprints, not secrets.
+
+ANDROID_PACKAGE = os.environ.get("ANDROID_PACKAGE", "com.explore91.app")
+
+# SHA-256 of every certificate that signs a build which should claim these
+# links. One per distribution channel, because each signs with a different
+# key: debug, your upload keystore, and — once you ship through Play — the
+# App signing key Google re-signs with, which you take from
+# Play Console > Setup > App integrity. Omitting that last one is the usual
+# reason links work in a sideloaded build and stop working after release.
+ANDROID_CERT_FINGERPRINTS = [
+    f.strip().upper()
+    for f in (os.environ.get("ANDROID_CERT_FINGERPRINTS", "") or "").split(",")
+    if f.strip()
+]
+
+# "<TeamID>.<bundleId>", e.g. ABCDE12345.com.explore91.app. Unset until there
+# is an Apple developer account; the association file is withheld rather than
+# served with a placeholder, because a wrong appID silently breaks the link
+# and iOS caches the file.
+IOS_APP_ID = os.environ.get("IOS_APP_ID", "").strip()
+
+# Paths the app claims. Anything outside this list stays in the browser —
+# /admin and /owner deliberately so.
+DEEP_LINK_PATHS = ["/place/*", "/city/*"]

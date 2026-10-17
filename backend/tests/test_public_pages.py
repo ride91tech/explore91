@@ -168,3 +168,125 @@ class TestSitemapAndRobots:
         r = requests.get(f"{BASE_URL}/api/", timeout=20)
         assert r.status_code == 200
         assert r.json().get("service") == "Explore91"
+
+
+class TestDeepLinkAssociation:
+    """The files that turn a shared https link into an app launch.
+
+    Both have delivery requirements that are easy to get subtly wrong, and a
+    wrong file fails silently — the link just opens a browser tab.
+    """
+
+    def test_assetlinks_is_served_as_json(self):
+        r = requests.get(f"{BASE_URL}/.well-known/assetlinks.json", timeout=20)
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("application/json")
+
+    def test_assetlinks_has_no_redirect(self):
+        """Android's verifier follows no redirects."""
+        r = requests.get(
+            f"{BASE_URL}/.well-known/assetlinks.json", timeout=20, allow_redirects=False
+        )
+        assert r.status_code == 200, f"redirected with {r.status_code}"
+
+    def test_assetlinks_shape(self):
+        r = requests.get(f"{BASE_URL}/.well-known/assetlinks.json", timeout=20)
+        statements = r.json()
+        assert isinstance(statements, list)
+        if not statements:
+            pytest.skip("ANDROID_CERT_FINGERPRINTS not configured")
+        target = statements[0]["target"]
+        assert statements[0]["relation"] == [
+            "delegate_permission/common.handle_all_urls"
+        ]
+        assert target["namespace"] == "android_app"
+        assert target["package_name"]
+        prints = target["sha256_cert_fingerprints"]
+        assert prints, "no fingerprints — links will not verify"
+        for fp in prints:
+            # 32 colon-separated hex bytes; a SHA-1 here is the classic error.
+            assert len(fp.split(":")) == 32, f"not a SHA-256 fingerprint: {fp}"
+
+    def test_apple_file_has_no_extension(self):
+        """iOS fetches exactly this path; .json appended breaks it."""
+        r = requests.get(
+            f"{BASE_URL}/.well-known/apple-app-site-association", timeout=20
+        )
+        assert r.status_code in (200, 404)
+        if r.status_code == 404:
+            pytest.skip("IOS_APP_ID not configured")
+        assert r.headers["content-type"].startswith("application/json")
+        details = r.json()["applinks"]["details"]
+        assert details and details[0]["appIDs"]
+        # "<TeamID>.<bundleId>" — a bare bundle id is a common mistake.
+        assert "." in details[0]["appIDs"][0]
+
+
+class TestReelSlugDenormalisation:
+    def test_reels_carry_their_places_slug(self):
+        """A shared reel links to its place; reels have no page of their own."""
+        r = requests.get(
+            f"{BASE_URL}/api/reels", params={"city": "goa", "limit": 20}, timeout=30
+        )
+        assert r.status_code == 200
+        reels = [x for x in r.json() if x.get("business_id")]
+        if not reels:
+            pytest.skip("no reels seeded")
+        missing = [x["reel_id"] for x in reels if not x.get("business_slug")]
+        assert not missing, f"reels without business_slug: {missing[:5]}"
+
+    def test_that_slug_actually_resolves(self):
+        """Sharing a reel of a listed place must land on that place's page.
+
+        Scoped to approved places on purpose. The public feed also carries
+        reels of unapproved businesses — see test_unapproved_place_has_no_
+        public_page — and those 404 correctly, so asserting on an arbitrary
+        reel would be asserting the wrong thing.
+        """
+        reels = requests.get(
+            f"{BASE_URL}/api/reels", params={"city": "goa", "limit": 20}, timeout=30
+        ).json()
+        listed = {
+            b["business_id"]
+            for b in requests.get(
+                f"{BASE_URL}/api/businesses",
+                params={"city": "goa", "limit": 100}, timeout=30,
+            ).json()
+        }
+        shareable = [
+            x for x in reels
+            if x.get("business_slug") and x.get("business_id") in listed
+        ]
+        if not shareable:
+            pytest.skip("no reels on listed places")
+        page = requests.get(
+            f"{BASE_URL}/place/{shareable[0]['business_slug']}", timeout=20
+        )
+        assert page.status_code == 200, "a shared reel would 404"
+
+    def test_unapproved_place_has_no_public_page(self):
+        """An unapproved business must not be publicly addressable.
+
+        Note the asymmetry this documents: the public reels feed filters only
+        on is_hidden, so a reel of an unapproved business is visible in the
+        app while its place page is not. The page behaving this way is right;
+        the feed is the side worth revisiting.
+        """
+        listed = {
+            b["business_id"]
+            for b in requests.get(
+                f"{BASE_URL}/api/businesses",
+                params={"city": "goa", "limit": 100}, timeout=30,
+            ).json()
+        }
+        reels = requests.get(
+            f"{BASE_URL}/api/reels", params={"city": "goa", "limit": 20}, timeout=30
+        ).json()
+        hidden = [
+            x for x in reels
+            if x.get("business_slug") and x.get("business_id") not in listed
+        ]
+        if not hidden:
+            pytest.skip("no reels on unlisted places right now")
+        r = requests.get(f"{BASE_URL}/place/{hidden[0]['business_slug']}", timeout=20)
+        assert r.status_code == 404

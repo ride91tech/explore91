@@ -10,14 +10,39 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.explore91.app",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "associatedDomains": [
+        "applinks:explore91.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.explore91.app"
+      "package": "com.explore91.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "explore91.com",
+              "pathPrefix": "/place"
+            },
+            {
+              "scheme": "https",
+              "host": "explore91.com",
+              "pathPrefix": "/city"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",

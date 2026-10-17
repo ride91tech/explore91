@@ -21,6 +21,7 @@ import * as Haptics from "expo-haptics";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { api, InterestPlace, InterestStatus, ReelT } from "@/src/api";
 import { reelCta, mapsUrl } from "@/src/reelCta";
+import { placeUrl, shareContent } from "@/src/links";
 import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/components/Toast";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
@@ -152,9 +153,11 @@ export default function ReelsFeed() {
   const shareReel = useCallback(async (reel: ReelT) => {
     const where = reel.business_name ? ` at ${reel.business_name}` : "";
     try {
-      await Share.share({
-        message: `${reel.caption}${where} — on Explore91`,
-      });
+      // Reels have no page of their own yet, so share the place the reel is
+      // of — that is the thing with a public URL and a preview card.
+      await Share.share(
+        shareContent(`${reel.caption}${where}`, placeUrl(reel.business_slug))
+      );
     } catch {
       show("Couldn't open sharing. Try again.", "error");
     }

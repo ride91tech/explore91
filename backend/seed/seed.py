@@ -82,6 +82,34 @@ async def backfill_slugs() -> None:
         logger.info("Backfilled %s business slugs", filled)
 
 
+
+
+async def backfill_reel_slugs() -> None:
+    """Denormalise each place's slug onto its reels.
+
+    A shared reel links to the place it is of, since reels have no public
+    page of their own, and denormalising avoids a join on every feed read.
+
+    Must run after reels exist: on a first boot the business slugs are
+    assigned before seed_reels() has inserted anything.
+    """
+    synced = 0
+    async for biz in db.businesses.find(
+        {"slug": {"$exists": True, "$ne": None}},
+        {"_id": 0, "business_id": 1, "slug": 1},
+    ):
+        result = await db.reels.update_many(
+            {
+                "business_id": biz["business_id"],
+                "business_slug": {"$ne": biz["slug"]},
+            },
+            {"$set": {"business_slug": biz["slug"]}},
+        )
+        synced += result.modified_count
+    if synced:
+        logger.info("Synced business_slug onto %s reels", synced)
+
+
 async def seed_data() -> None:
     # Ensure all pre-existing seeded businesses have is_approved + owner_id
     await db.businesses.update_many(
@@ -93,6 +121,7 @@ async def seed_data() -> None:
         logger.info("Seed skipped — %s businesses already present", count)
         await backfill_slugs()
         await seed_reels()
+        await backfill_reel_slugs()
         return
     docs = []
     for i, (
@@ -163,6 +192,7 @@ async def seed_data() -> None:
     logger.info("Seeded %s businesses", len(docs))
     await backfill_slugs()
     await seed_reels()
+    await backfill_reel_slugs()
 
 
 async def ensure_indexes() -> None:

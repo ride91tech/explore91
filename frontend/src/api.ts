@@ -71,6 +71,9 @@ export type Business = {
   category: string;
   city: string;
   address: string;
+  /** Public URL slug, e.g. /place/casa-sarita-goa. Absent on places created
+   *  before slugs existed, until the next backfill runs. */
+  slug?: string | null;
   /** Broader area label shown above the name; falls back to `address`. */
   area?: string | null;
   /** One evocative reason to go; falls back to `description`. */
@@ -168,6 +171,8 @@ export type ReelT = {
   reel_id: string;
   business_id?: string | null;
   business_name?: string | null;
+  /** Slug of the place this reel is of; what a share links to. */
+  business_slug?: string | null;
   business_category?: string | null;
   city: string;
   video_url: string;

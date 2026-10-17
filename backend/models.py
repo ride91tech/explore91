@@ -254,6 +254,9 @@ class Reel(BaseModel):
     reel_id: str
     business_id: Optional[str] = None
     business_name: Optional[str] = None
+    # Slug of the place this reel is of — what a shared reel links to, since
+    # reels have no public page of their own.
+    business_slug: Optional[str] = None
     business_category: Optional[str] = None
     city: str
     video_url: str

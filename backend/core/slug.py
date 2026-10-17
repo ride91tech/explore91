@@ -48,3 +48,39 @@ async def unique_slug(
         candidate = f"{base[: MAX_SLUG_LEN - len(tail)].strip('-')}{tail}"
         suffix += 1
     return candidate
+
+
+async def ensure_business_slug(business: dict) -> Optional[str]:
+    """Return a business's slug, assigning one if it has none.
+
+    Every business gets a slug at creation and the boot-time backfill covers
+    older rows, but a document can still turn up without one — inserted by a
+    migration, or created while a backfill was mid-run. Anything that
+    denormalises the slug (reels, so a shared reel has somewhere to point)
+    would otherwise quietly produce an unshareable record, and the only
+    symptom is a share button that sends bare text.
+
+    Imported here rather than at module scope to keep this module importable
+    without a database.
+    """
+    from .db import db
+
+    existing = business.get("slug")
+    if existing:
+        return existing
+
+    business_id = business.get("business_id")
+    if not business_id:
+        return None
+
+    async def taken(candidate: str) -> bool:
+        return await db.businesses.count_documents({"slug": candidate}, limit=1) > 0
+
+    slug = await unique_slug(
+        business.get("name"), business.get("city"),
+        exists=taken, fallback=business_id,
+    )
+    await db.businesses.update_one(
+        {"business_id": business_id}, {"$set": {"slug": slug}}
+    )
+    return slug

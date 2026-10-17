@@ -9,6 +9,7 @@ have the app installed.
 Mounted at the root, deliberately outside the /api prefix: these are pages,
 not API responses, and their URLs are public and permanent.
 """
+import json
 import os
 from pathlib import Path
 from typing import Optional
@@ -17,6 +18,12 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.templating import Jinja2Templates
 
+from core.config import (
+    ANDROID_CERT_FINGERPRINTS,
+    ANDROID_PACKAGE,
+    DEEP_LINK_PATHS,
+    IOS_APP_ID,
+)
 from core.db import db
 from routes.catalog import get_cities
 from seed.data import CATEGORIES
@@ -214,4 +221,75 @@ async def robots(request: Request):
         "Disallow: /admin\n"
         "Disallow: /owner\n"
         f"Sitemap: {_base_url(request)}/sitemap.xml\n"
+    )
+
+
+# --- Deep-link association files -----------------------------------------
+#
+# These two files are what turn a shared https:// link into an app launch.
+# Both have strict delivery requirements that are easy to get wrong:
+#
+#   * served over https, from the apex the link points at
+#   * Content-Type: application/json
+#   * no redirects — both verifiers follow none
+#   * the Apple file has NO .json extension
+#
+# They are served from the API because that is what already answers on this
+# origin. If the public site ever moves behind a CDN, these must move with it.
+
+
+@router.get("/.well-known/assetlinks.json")
+async def android_asset_links():
+    """Android App Links: lets Android verify this site vouches for the app.
+
+    Returns an empty list when no fingerprints are configured rather than a
+    malformed entry — Android treats a broken file as "not verified", which
+    is the same outcome but much harder to diagnose than an obviously empty
+    one.
+    """
+    if not ANDROID_CERT_FINGERPRINTS:
+        return Response(content="[]", media_type="application/json")
+
+    statements = [
+        {
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+                "namespace": "android_app",
+                "package_name": ANDROID_PACKAGE,
+                "sha256_cert_fingerprints": ANDROID_CERT_FINGERPRINTS,
+            },
+        }
+    ]
+    return Response(
+        content=json.dumps(statements, indent=2), media_type="application/json"
+    )
+
+
+@router.get("/.well-known/apple-app-site-association")
+async def apple_app_site_association():
+    """iOS Universal Links.
+
+    404s until IOS_APP_ID is set. That is deliberate: iOS caches this file,
+    and serving a placeholder appID would bake a broken association in for
+    users who happened to install early.
+    """
+    if not IOS_APP_ID:
+        return Response(
+            content=json.dumps({"applinks": {"details": []}}),
+            media_type="application/json",
+            status_code=404,
+        )
+
+    payload = {
+        "applinks": {
+            "details": [
+                {
+                    "appIDs": [IOS_APP_ID],
+                    "components": [{"/": path} for path in DEEP_LINK_PATHS],
+                }
+            ]
+        }
+    }
+    return Response(
+        content=json.dumps(payload, indent=2), media_type="application/json"
     )

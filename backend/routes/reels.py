@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from core.db import db
+from core.slug import ensure_business_slug
 from core.security import client_key, get_current_user, rate_limit, require_role
 from models import Reel, ReelCreate, ReelLikeToggle
 from seed.data import CATEGORIES
@@ -135,6 +136,10 @@ async def owner_create_reel(
         "reel_id": f"rl_{uuid.uuid4().hex[:10]}",
         "business_id": biz["business_id"],
         "business_name": biz["name"],
+        # Denormalised so a shared reel has a place to link to. Assigns one
+        # to the business if it somehow has none, rather than storing null
+        # and leaving the reel permanently unshareable.
+        "business_slug": await ensure_business_slug(biz),
         "business_category": biz["category"],
         "city": biz["city"],
         "video_url": payload.video_url,

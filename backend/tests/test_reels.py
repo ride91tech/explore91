@@ -264,10 +264,15 @@ def _seed_owner_business(user_id: str) -> str:
         client = AsyncIOMotorClient(os.environ["MONGO_URL"])
         db = client[os.environ["DB_NAME"]]
         biz_id = f"biz_{uuid.uuid4().hex[:10]}"
+        name = f"TEST_OwnerBiz_{uuid.uuid4().hex[:6]}"
         await db.businesses.insert_one({
             "business_id": biz_id,
             "owner_id": user_id,
-            "name": f"TEST_OwnerBiz_{uuid.uuid4().hex[:6]}",
+            "name": name,
+            # Inserted straight into Mongo, so nothing assigns a slug here the
+            # way the API and the boot-time backfill do. Without one, reels
+            # created from this business have no public URL to be shared as.
+            "slug": name.lower().replace("_", "-") + "-goa",
             "category": "cafes",
             "city": "goa",
             "address": "TEST addr",
