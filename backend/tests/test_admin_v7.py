@@ -25,7 +25,7 @@ load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
 # Same guard as conftest: never let the mobile app's production URL aim
 # these destructive tests at live data.
-BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://localhost:8000").rstrip("/")
+BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://127.0.0.1:8000").rstrip("/")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 

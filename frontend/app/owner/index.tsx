@@ -13,6 +13,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { api, Business } from "@/src/api";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
+import type { IconName } from "@/src/icons";
 
 type Dashboard = {
   business_count: number;
@@ -216,7 +217,7 @@ function KPI({
   value,
   tint,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   label: string;
   value: string | number;
   tint?: string;
@@ -239,7 +240,7 @@ function QuickAction({
   onPress,
   testID,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   title: string;
   hint: string;
   onPress: () => void;

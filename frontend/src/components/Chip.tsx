@@ -3,10 +3,11 @@ import { Pressable, Text, StyleSheet, View } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import * as Haptics from "expo-haptics";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
+import type { IconName } from "@/src/icons";
 
 type Props = {
   label: string;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: IconName;
   active?: boolean;
   onPress?: () => void;
   testID?: string;

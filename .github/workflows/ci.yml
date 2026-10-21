@@ -58,6 +58,13 @@ jobs:
       # and those tests cannot distinguish clients at all.
       TRUSTED_PROXY_HOPS: "1"
       ADMIN_EMAILS: ci-admin@explore91.dev
+      # The Apple sign-in tests assert on the *configured* behaviour of
+      # /auth/apple: 401 for a bad token, 429 past the rate limit. Without
+      # this the endpoint short-circuits before any of that and they all fail
+      # on the unconfigured path instead, which is not what they are testing.
+      # These are public app identifiers — they ship inside the client binary
+      # — so they belong here rather than in a secret.
+      APPLE_AUDIENCES: com.explore91.app,host.exp.Exponent
 
     steps:
       - uses: actions/checkout@v4
@@ -125,21 +132,17 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Typecheck (ratchet)
+      - name: Typecheck
         working-directory: frontend
-        # There are pre-existing type errors (icon glyphMap typings, a nullable
-        # `user` in the admin layout). Failing outright would make CI red from
-        # day one and train everyone to ignore it. Instead this holds the line:
-        # the count may fall, never rise. Lower the baseline when you fix some.
-        run: |
-          BASELINE=11
-          COUNT=$(npx tsc --noEmit 2>&1 | grep -c "error TS" || true)
-          echo "TypeScript errors: $COUNT (baseline $BASELINE)"
-          if [ "$COUNT" -gt "$BASELINE" ]; then
-            echo "::error::TypeScript errors rose from $BASELINE to $COUNT"
-            npx tsc --noEmit 2>&1 | grep "error TS" || true
-            exit 1
-          fi
-          if [ "$COUNT" -lt "$BASELINE" ]; then
-            echo "::notice::Errors are down to $COUNT - lower BASELINE in .github/workflows/ci.yml"
-          fi
+        # This was a ratchet against a baseline of 11 while the icon typings
+        # and a nullable `user` in the admin layout were outstanding. Those are
+        # fixed, so it is a plain gate now — any type error fails the build.
+        #
+        # The first CI run reported 14 where this machine reported 11. The
+        # extra three were `segments[1]` on a 1-tuple: `useSegments()` is typed
+        # from .expo/types/router.d.ts, which the dev server generates and
+        # .gitignore excludes, so a developer machine and a clean checkout
+        # disagreed. src/routing.ts removes that dependency. Do not "fix" a
+        # future disagreement by generating the artifact here — if the check
+        # needs a build artifact to pass, it is not checking the source.
+        run: npx tsc --noEmit

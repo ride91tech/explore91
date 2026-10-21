@@ -1,4 +1,5 @@
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter } from "expo-router";
+import { useRouteSegments } from "@/src/routing";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { LogBox, View } from "react-native";
@@ -15,7 +16,7 @@ SplashScreen.preventAutoHideAsync();
 
 function AuthGate() {
   const { user, loading } = useAuth();
-  const segments = useSegments();
+  const segments = useRouteSegments();
   const router = useRouter();
 
   useEffect(() => {

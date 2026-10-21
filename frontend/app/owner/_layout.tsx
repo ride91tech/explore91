@@ -10,7 +10,8 @@ import {
   Modal,
 } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Slot, useRouter } from "expo-router";
+import { useRouteSegments } from "@/src/routing";
 import { useAuth } from "@/src/auth";
 import { api } from "@/src/api";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
@@ -28,7 +29,7 @@ const MOBILE_BREAKPOINT = 900;
 
 export default function OwnerLayout() {
   const router = useRouter();
-  const segments = useSegments();
+  const segments = useRouteSegments();
   const { user, loading, signOut, refresh } = useAuth();
   const { width } = useWindowDimensions();
   const isDesktop = width >= MOBILE_BREAKPOINT;

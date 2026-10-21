@@ -16,7 +16,7 @@ _REPO_DIR = os.path.dirname(_BACKEND_DIR)
 load_dotenv(os.path.join(_REPO_DIR, "frontend", ".env"))
 load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
-BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://localhost:8000").rstrip("/")
+BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://127.0.0.1:8000").rstrip("/")
 
 
 def _meta(html: str, prop: str):

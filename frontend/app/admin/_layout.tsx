@@ -9,7 +9,8 @@ import {
   Platform,
 } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Slot, useRouter } from "expo-router";
+import { useRouteSegments } from "@/src/routing";
 import { useAuth } from "@/src/auth";
 import { AdminSignIn } from "@/src/components/admin/AdminSignIn";
 import { ToastHost } from "@/src/components/admin/feedback";
@@ -31,7 +32,7 @@ const NAV = [
 
 export default function AdminLayout() {
   const router = useRouter();
-  const segments = useSegments();
+  const segments = useRouteSegments();
   const { user, loading, signOut } = useAuth();
   const active = segments[1] || "index";
 
@@ -48,11 +49,13 @@ export default function AdminLayout() {
     );
   }
 
-  const isAdmin = user?.roles?.includes("admin");
-
-  // Not signed in OR signed in but not an admin — show the dedicated
-  // web sign-in / access-request screen. It handles both states internally.
-  if (!isAdmin) {
+  // Written as one negated check on `user` rather than via an `isAdmin`
+  // boolean so TypeScript narrows `user` to non-null for the rest of the
+  // component. The optional-chain form read the same at runtime but left
+  // `user` possibly-null below, which is what the sidebar had to paper over.
+  if (!user || !user.roles?.includes("admin")) {
+    // Not signed in, or signed in without the role — the dedicated web
+    // sign-in / access-request screen handles both states internally.
     return <AdminSignIn />;
   }
 

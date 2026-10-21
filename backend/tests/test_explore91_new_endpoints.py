@@ -8,7 +8,7 @@ import requests
 
 # Same guard as conftest: never let the mobile app's production URL aim
 # these destructive tests at live data.
-BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://localhost:8000").rstrip("/")
+BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://127.0.0.1:8000").rstrip("/")
 
 
 # --- Regression: previously-passing endpoints -----------------------------

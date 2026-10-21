@@ -73,7 +73,15 @@ async def _verify_apple_identity_token(identity_token: str) -> dict:
     import jwt as _jwt
 
     if not APPLE_AUDIENCES:
-        raise HTTPException(status_code=500, detail="APPLE_AUDIENCES not configured on server")
+        # 503, matching the Google path above. A missing audience list is a
+        # deployment that has not been finished, not a fault in the request or
+        # a crash in the server — and a 500 here both pages whoever watches
+        # the error rate and tells the caller nothing it can act on. The
+        # detail names the variable so the fix is obvious from the response.
+        raise HTTPException(
+            status_code=503,
+            detail="Apple Sign-In isn't configured. Set APPLE_AUDIENCES.",
+        )
     try:
         header = _jwt.get_unverified_header(identity_token)
     except Exception:

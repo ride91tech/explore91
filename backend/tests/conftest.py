@@ -25,11 +25,18 @@ load_dotenv(os.path.join(BACKEND_DIR, ".env"))
 # The suite drives the API over HTTP while seeding fixtures straight into Mongo,
 # so both must address the same deployment. frontend/.env is the mobile app's
 # backend URL and legitimately points at production, so taking BASE_URL from it
-# would aim destructive admin tests at live data. TEST_BASE_URL overrides it;
-# otherwise default to localhost.
+# would aim destructive admin tests at live data. TEST_BASE_URL overrides it.
+#
+# The default is the literal 127.0.0.1 rather than "localhost" deliberately.
+# On Windows "localhost" resolves to ::1 first and each new connection pays a
+# ~2s fallback before reaching the IPv4 listener. requests opens a fresh
+# connection per call, so a test that fires 25 of them took 60s instead of 4 —
+# long enough for the rate limiter's 60s window to roll over mid-loop, which
+# made the limiter tests fail for a reason that had nothing to do with the
+# limiter. CI sets TEST_BASE_URL and never saw it; only developer machines did.
 BASE_URL = (
     os.environ.get("TEST_BASE_URL")
-    or "http://localhost:8000"
+    or "http://127.0.0.1:8000"
 ).rstrip("/")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]

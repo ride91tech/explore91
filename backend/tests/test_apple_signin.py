@@ -39,7 +39,7 @@ load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
 # Same guard as conftest: never let the mobile app's production URL aim
 # these destructive tests at live data.
-BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://localhost:8000").rstrip("/")
+BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://127.0.0.1:8000").rstrip("/")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
@@ -56,6 +56,23 @@ def _as_fresh_client() -> dict:
     is what a proxy would have appended.
     """
     return {"X-Forwarded-For": "198.51.100." + str(random.randint(2, 250))}
+
+
+def _as_dedicated_client() -> dict:
+    """Headers for a caller whose rate-limit bucket is its own.
+
+    Deliberately from a different reserved block than _as_fresh_client, which
+    draws at random from 198.51.100.0/24. The limiter buckets on address
+    alone, so a test that asserts *where* in a burst the 429 lands needs an
+    address no other test can draw: a collision spends one of the 20 and
+    moves the 429 a call earlier. With ~20 other calls over 249 addresses
+    that happened often enough to fail about one serial run in three.
+
+    Still randomised within the block, because the window is 60s of wall
+    clock and two runs started inside one window would otherwise share a
+    bucket and find it already full.
+    """
+    return {"X-Forwarded-For": "203.0.113." + str(random.randint(2, 250))}
 
 
 
@@ -89,14 +106,21 @@ class TestAppleSignInErrorPaths:
             for err in body["detail"]
         ), body
 
-    def _post_token(self, token: str, max_wait: int = 65):
-        """POST with retry-once if the IP rate bucket is currently exhausted."""
-        r = requests.post(APPLE_ENDPOINT, json={"identity_token": token}, timeout=15)
-        if r.status_code == 429:
-            retry = int(r.headers.get("Retry-After", "5"))
-            time.sleep(min(retry + 1, max_wait))
-            r = requests.post(APPLE_ENDPOINT, json={"identity_token": token}, timeout=15)
-        return r
+    def _post_token(self, token: str):
+        """POST as a client of its own.
+
+        These used to arrive as the bare loopback address, sharing one bucket
+        with test_zzz_rate_limit below - so this class spent part of the
+        limiter's allowance before that test began, and the retry-once sleep
+        that used to live here was working around its own cause. A distinct
+        client per call means none of these three can affect it.
+        """
+        return requests.post(
+            APPLE_ENDPOINT,
+            json={"identity_token": token},
+            headers=_as_fresh_client(),
+            timeout=15,
+        )
 
     def test_malformed_token_returns_401_with_specific_detail(self):
         r = self._post_token("nope.nope.nope")
@@ -126,22 +150,39 @@ class TestAppleSignInErrorPaths:
         assert r.json().get("detail") == "Missing kid in Apple token"
 
     def test_zzz_rate_limit_21st_call_returns_429(self):
-        """20/min per IP â€” fire 25 requests fast; 21st+ should be 429 with Retry-After."""
-        got_429 = False
-        retry_after_seen = False
+        """20/min per caller - fire 25 as one client; the 21st must be 429.
+
+        One pinned client for the whole burst, not the shared loopback
+        address. Sharing it meant this could only pass when its bucket
+        happened to be empty, which depended on what ran in the preceding
+        minute: too little allowance left and an early call 429s where the
+        loop expects 401; a slow enough loop and the 60s window rolls over
+        mid-burst so no 429 ever arrives. Neither outcome says anything about
+        the limiter. The name still sorts last, which no longer matters.
+        """
+        client = _as_dedicated_client()
         garbage = "nope.nope.nope"
-        for i in range(25):
-            r = requests.post(APPLE_ENDPOINT, json={"identity_token": garbage}, timeout=15)
+        statuses = []
+        retry_after = None
+        for _ in range(25):
+            r = requests.post(
+                APPLE_ENDPOINT,
+                json={"identity_token": garbage},
+                headers=client,
+                timeout=15,
+            )
+            statuses.append(r.status_code)
             if r.status_code == 429:
-                got_429 = True
-                if r.headers.get("Retry-After"):
-                    retry_after_seen = True
+                retry_after = r.headers.get("Retry-After")
                 break
-            # first 20 should be 401 (malformed)
-            if i < 20:
-                assert r.status_code == 401, f"call {i}: {r.status_code} {r.text}"
-        assert got_429, "expected a 429 within 25 rapid calls (limit=20/min per IP)"
-        assert retry_after_seen, "429 must include Retry-After header"
+
+        assert 429 in statuses, f"no 429 in 25 calls as one client: {statuses}"
+        # Exactly the first 20 are allowed, so the 429 lands on the 21st.
+        # Asserting the position catches an off-by-one that merely "a 429
+        # happened somewhere" would not.
+        assert statuses.index(429) == 20, f"429 at call {statuses.index(429) + 1}: {statuses}"
+        assert set(statuses[:20]) == {401}, f"first 20 were not all 401: {statuses[:20]}"
+        assert retry_after, "429 must include Retry-After header"
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +250,63 @@ class TestAppleSignInAudienceCheck:
 # ---------------------------------------------------------------------------
 # 3) Env + Mongo index + /auth/me apple_sub field
 # ---------------------------------------------------------------------------
+class TestAppleSignInUnconfigured:
+    """What /auth/apple does when APPLE_AUDIENCES is not set.
+
+    Production has never had this variable set, so this is the path every
+    real Apple sign-in attempt takes today — and it returned 500 until now.
+    A 500 reads as "the server broke" to anyone watching the error rate and
+    gives the client nothing to act on; an unfinished deployment is a 503,
+    which is what the Google path already returned for the same situation.
+
+    This is patched in-process rather than left to the environment on
+    purpose. The CI job sets APPLE_AUDIENCES so the rest of this file can
+    exercise the configured behaviour, and that would otherwise make the
+    unconfigured path the one thing the suite never looks at.
+    """
+
+    def test_returns_503_not_500(self, monkeypatch):
+        from routes import auth as auth_mod
+
+        monkeypatch.setattr(auth_mod, "APPLE_AUDIENCES", set())
+
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "explore91_server_apple_unconfigured", _SERVER_PY
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with TestClient(mod.app) as client:
+            r = client.post(
+                "/api/auth/apple",
+                json={"identity_token": "nope.nope.nope"},
+                headers=_as_fresh_client(),
+            )
+
+        assert r.status_code == 503, r.text
+        # The detail has to name the variable: this response is read by
+        # whoever is deploying, and "not configured" alone does not say what
+        # to set.
+        assert "APPLE_AUDIENCES" in r.json().get("detail", ""), r.text
+
+    def test_configured_path_does_not_return_503(self):
+        """Guards against the opposite mistake — a 503 everywhere.
+
+        If this fails while the test above passes, the endpoint is reporting
+        itself unconfigured when it is configured.
+        """
+        r = requests.post(
+            APPLE_ENDPOINT,
+            json={"identity_token": "nope.nope.nope"},
+            headers=_as_fresh_client(),
+            timeout=15,
+        )
+        if r.status_code == 429:
+            pytest.skip("rate-limit bucket exhausted")
+        assert r.status_code == 401, r.text
+
+
 class TestAppleSignInEnvAndIndex:
     def test_apple_audiences_env_contains_required_values(self):
         env = os.environ.get("APPLE_AUDIENCES", "")

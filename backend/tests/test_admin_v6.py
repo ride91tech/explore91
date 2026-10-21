@@ -27,7 +27,20 @@ load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
 # Same guard as conftest: never let the mobile app's production URL aim
 # these destructive tests at live data.
-BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://localhost:8000").rstrip("/")
+BASE_URL = (os.environ.get("TEST_BASE_URL") or "http://127.0.0.1:8000").rstrip("/")
+
+# Every identifier this module invents carries this, and the admin_ctx teardown
+# below sweeps only what matches it.
+#
+# admin_ctx is module-scoped but `--dist loadscope` splits by CLASS, so a run
+# instantiates one admin_ctx per worker that touched this file. The first
+# worker to finish its classes then ran a teardown that deleted rows by bare
+# prefix -- "^TEST v6 fraud", "^TEST_", "^biz_TESTv6_" -- and those matched the
+# rows the OTHER worker was still asserting on. The symptom was a list
+# endpoint returning [] in the middle of a test that had just created a row,
+# about one run in six. Scoping the prefixes makes each worker's sweep reach
+# only its own rows.
+WORKER = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
@@ -79,12 +92,12 @@ def admin_ctx():
         await db.users.delete_many({"email": email})
         # Safety net: purge any leftover CMS test data (in case an assertion failed
         # mid-test and skipped the inline DELETE cleanup).
-        await db.categories_cms.delete_many({"slug": {"$regex": "^yoga-studios-"}})
-        await db.cities_cms.delete_many({"slug": {"$regex": "^testcity-"}})
-        await db.banners.delete_many({"title": {"$regex": "^TEST_"}})
-        await db.fraud_flags.delete_many({"reason": {"$regex": "^TEST v6 fraud"}})
-        await db.businesses.delete_many({"business_id": {"$regex": "^biz_TESTv6_"}})
-        await db.reels.delete_many({"reel_id": {"$regex": "^reel_TESTv6_"}})
+        await db.categories_cms.delete_many({"slug": {"$regex": f"^yoga-studios-{WORKER}-"}})
+        await db.cities_cms.delete_many({"slug": {"$regex": f"^testcity-{WORKER}-"}})
+        await db.banners.delete_many({"title": {"$regex": f"^TEST_{WORKER}_"}})
+        await db.fraud_flags.delete_many({"reason": {"$regex": f"^TEST v6 fraud {WORKER} "}})
+        await db.businesses.delete_many({"business_id": {"$regex": f"^biz_TESTv6_{WORKER}_"}})
+        await db.reels.delete_many({"reel_id": {"$regex": f"^reel_TESTv6_{WORKER}_"}})
     _run(_clean())
 
 
@@ -115,7 +128,7 @@ class TestCategoriesCMS:
         assert isinstance(data, list) and len(data) >= 24
 
     def test_create_delete_and_public_pickup(self, admin_ctx):
-        slug = f"yoga-studios-{uuid.uuid4().hex[:4]}"
+        slug = f"yoga-studios-{WORKER}-{uuid.uuid4().hex[:4]}"
         # cleanup possible leftover
         requests.delete(f"{BASE_URL}/api/admin/categories/{slug}", headers=admin_ctx["H"], timeout=15)
 
@@ -162,7 +175,7 @@ class TestCategoriesCMS:
 # ============================================================================
 class TestCitiesCMS:
     def test_create_and_public_pickup(self, admin_ctx):
-        slug = f"testcity-{uuid.uuid4().hex[:4]}"
+        slug = f"testcity-{WORKER}-{uuid.uuid4().hex[:4]}"
         payload = {
             "slug": slug, "name": "Test City",
             "state": "Test State",
@@ -194,7 +207,7 @@ class TestCitiesCMS:
     def test_a_new_city_starts_not_live(self, admin_ctx):
         """Freshly added cities have no listings, so the app holds them back as
         "coming soon" rather than showing an empty city."""
-        slug = f"testcity-{uuid.uuid4().hex[:4]}"
+        slug = f"testcity-{WORKER}-{uuid.uuid4().hex[:4]}"
         payload = {
             "slug": slug, "name": "Test City",
             "state": "Test State",
@@ -246,7 +259,7 @@ class TestBanners:
         assert isinstance(r.json(), list)
 
     def test_create_and_read_active(self, admin_ctx):
-        payload = {"title": "TEST_Promo", "image": "https://cdn.x.com/b.jpg",
+        payload = {"title": f"TEST_{WORKER}_Promo", "image": "https://cdn.x.com/b.jpg",
                    "position": "home_promo", "city": "goa"}
         r = requests.post(f"{BASE_URL}/api/admin/banners", headers=admin_ctx["H"], json=payload, timeout=15)
         assert r.status_code == 200, r.text
@@ -306,7 +319,7 @@ class TestBanners:
         must not persist; the valid title change must persist.
         """
         bid = TestBanners.created_ids[-1]
-        new_title = "TEST_Promo_v7"
+        new_title = f"TEST_{WORKER}_Promo_v7"
         p = requests.patch(f"{BASE_URL}/api/admin/banners/{bid}", headers=admin_ctx["H"],
                            json={"title": new_title, "totally_unknown_field": "evil-xss"},
                            timeout=15)
@@ -372,7 +385,7 @@ class TestReelsModeration:
         # create a throwaway reel directly in mongo
         async def _mk():
             db = _mongo()
-            rid = f"reel_TESTv6_{uuid.uuid4().hex[:6]}"
+            rid = f"reel_TESTv6_{WORKER}_{uuid.uuid4().hex[:6]}"
             await db.reels.insert_one({
                 "reel_id": rid, "caption": "TEST reel v6",
                 "video_url": "https://x.com/v.mp4",
@@ -480,7 +493,7 @@ class TestFraudFlags:
     @pytest.fixture
     def flag(self, admin_ctx):
         """An open flag that belongs to this test alone."""
-        reason = f"TEST v6 fraud {uuid.uuid4().hex[:8]}"
+        reason = f"TEST v6 fraud {WORKER} {uuid.uuid4().hex[:8]}"
         r = requests.post(
             f"{BASE_URL}/api/admin/flags", headers=admin_ctx["H"],
             json={"entity_type": "business",
@@ -589,8 +602,8 @@ class TestBusinessDeleteCascade:
         # seed a biz + reel linked to it
         async def _mk():
             db = _mongo()
-            bid = f"biz_TESTv6_{uuid.uuid4().hex[:6]}"
-            rid = f"reel_TESTv6_{uuid.uuid4().hex[:6]}"
+            bid = f"biz_TESTv6_{WORKER}_{uuid.uuid4().hex[:6]}"
+            rid = f"reel_TESTv6_{WORKER}_{uuid.uuid4().hex[:6]}"
             await db.businesses.insert_one({
                 "business_id": bid, "name": "TEST_OwnerBiz v6 cascade",
                 "city": "goa", "category": "bars-cafes",

@@ -15,6 +15,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/auth";
 import { api, Booking } from "@/src/api";
 import { colors, radius, spacing, type as tType } from "@/src/theme";
+import type { IconName } from "@/src/icons";
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
@@ -146,7 +147,7 @@ function SettingRow({
   onPress,
   testID,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   label: string;
   hint?: string;
   onPress?: () => void;

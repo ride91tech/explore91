@@ -89,3 +89,8 @@ credentials.json
 !.env.example
 !backend/.env.example
 !frontend/.env.example
+
+# Built app binaries. Large, reproducible from source, and two were sitting
+# untracked in the repo root waiting to be committed by a stray `git add -A`.
+*.apk
+*.aab
