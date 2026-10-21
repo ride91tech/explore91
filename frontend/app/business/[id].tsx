@@ -49,6 +49,9 @@ export default function BusinessDetail() {
   const [nearby, setNearby] = useState<Business[]>([]);
   const [interest, setInterest] = useState<InterestStatus | null>(null);
   const [savingInterest, setSavingInterest] = useState(false);
+  // null while fine; "missing" when the place is gone; "error" for
+  // anything transient, which is worth offering a retry for.
+  const [loadFailure, setLoadFailure] = useState<null | "missing" | "error">(null);
 
   const loadReviews = useCallback(async () => {
     try {
@@ -120,6 +123,7 @@ export default function BusinessDetail() {
   };
 
   const load = useCallback(async () => {
+    setLoadFailure(null);
     try {
       const [b, savedList, near, flag] = await Promise.all([
         api<Business>(`/businesses/${id}`),
@@ -132,8 +136,11 @@ export default function BusinessDetail() {
       setSaved(savedList.some((s) => s.business_id === id));
       setNearby(near);
       setInterest(flag?.status ?? null);
-    } catch (e) {
+    } catch (e: any) {
       console.log("business detail", e);
+      // A 404 is a delisted or mistyped place and will not fix itself;
+      // anything else is probably the network and is worth retrying.
+      setLoadFailure(e?.status === 404 ? "missing" : "error");
     } finally {
       setLoading(false);
     }
@@ -157,10 +164,56 @@ export default function BusinessDetail() {
     }
   };
 
-  if (loading || !biz) {
+  if (loading) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator color={colors.brandPrimary} />
+      </View>
+    );
+  }
+
+  // Without this the screen spun forever on a place that no longer exists.
+  // That matters now place links are public and shareable: a link to a
+  // delisted place used to hand the visitor a spinner that never resolved.
+  if (!biz) {
+    const missing = loadFailure !== "error";
+    return (
+      <View style={[styles.loader, { padding: spacing.xl, gap: spacing.md }]}>
+        <Ionicons
+          name={missing ? "compass-outline" : "cloud-offline-outline"}
+          size={30}
+          color={colors.onSurfaceTertiary}
+        />
+        <Text style={styles.gone} testID="place-unavailable">
+          {missing
+            ? "This place isn't on Explore91 anymore."
+            : "Couldn't load this place."}
+        </Text>
+        <Text style={styles.goneSub}>
+          {missing
+            ? "It may have been removed, or the link may be out of date."
+            : "Check your connection and try again."}
+        </Text>
+        <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
+          {!missing ? (
+            <Pressable
+              testID="place-retry"
+              onPress={() => { setLoading(true); load(); }}
+              style={styles.goneBtn}
+            >
+              <Text style={styles.goneBtnText}>Try again</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            testID="place-explore"
+            onPress={() => router.replace("/(tabs)/explore")}
+            style={[styles.goneBtn, missing && styles.goneBtnPrimary]}
+          >
+            <Text style={[styles.goneBtnText, missing && styles.goneBtnTextPrimary]}>
+              Explore nearby
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -475,6 +528,20 @@ export default function BusinessDetail() {
 }
 
 const styles = StyleSheet.create({
+  gone: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface, textAlign: "center" },
+  goneSub: { fontSize: tType.base, color: colors.onSurfaceSecondary, textAlign: "center" },
+  goneBtn: {
+    paddingHorizontal: spacing.lg,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  goneBtnPrimary: { backgroundColor: colors.brandTertiary },
+  goneBtnText: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  goneBtnTextPrimary: { color: "#FFF" },
+
   areaKicker: {
     fontSize: 10,
     fontWeight: "700",
