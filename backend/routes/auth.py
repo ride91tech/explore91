@@ -1,12 +1,17 @@
-"""Auth: Google Sign-In, Apple Sign-In, me, roles.
+"""Auth: development sign-in, Apple Sign-In, me, roles.
 
-Both providers are verified here against the issuer's own JWKS — no third
-party sits in the login path.
+Google Sign-In was removed. /auth/dev stands in for it until OTP sign-in is
+built: it takes an email and issues a session, verifying nothing, and is
+inert unless DEV_AUTH_ENABLED is set. See core.config.dev_auth_enabled for
+why that gate exists and why the route 404s instead of refusing.
+
+Apple is still verified here against Apple's own JWKS, so no third party sits
+in that login path.
 """
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Dict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -16,10 +21,8 @@ from core.config import (
     APPLE_AUDIENCES,
     APPLE_ISSUER,
     APPLE_JWKS_URL,
-    GOOGLE_CLIENT_IDS,
-    GOOGLE_ISSUERS,
-    GOOGLE_JWKS_URL,
     SESSION_TTL_DAYS,
+    dev_auth_enabled,
 )
 from core.db import db
 from core.security import (
@@ -32,8 +35,8 @@ from core.security import (
 from models import (
     AppleSignInRequest,
     AuthResponse,
+    DevSignIn,
     RoleUpgrade,
-    GoogleSignIn,
     User,
 )
 
@@ -115,76 +118,6 @@ async def _verify_apple_identity_token(identity_token: str) -> dict:
     return claims
 
 
-# --- Google Sign-In -------------------------------------------------------
-_GOOGLE_JWKS: Dict[str, object] = {}
-_GOOGLE_JWKS_FETCHED_AT: float = 0.0
-_GOOGLE_JWKS_TTL = 3600  # 1 hour
-
-
-async def _load_google_jwks(force: bool = False) -> None:
-    global _GOOGLE_JWKS, _GOOGLE_JWKS_FETCHED_AT
-    import jwt as _jwt
-
-    now = time.monotonic()
-    if not force and _GOOGLE_JWKS and (now - _GOOGLE_JWKS_FETCHED_AT) < _GOOGLE_JWKS_TTL:
-        return
-    async with httpx.AsyncClient(timeout=10.0) as hc:
-        r = await hc.get(GOOGLE_JWKS_URL)
-    if r.status_code != 200:
-        raise HTTPException(status_code=502, detail="Could not reach Google JWKS")
-    _GOOGLE_JWKS = {}
-    for k in r.json().get("keys", []):
-        kid = k.get("kid")
-        if not kid:
-            continue
-        try:
-            _GOOGLE_JWKS[kid] = _jwt.PyJWK(k)
-        except Exception:
-            continue
-    _GOOGLE_JWKS_FETCHED_AT = now
-
-
-async def _verify_google_id_token(id_token: str) -> dict:
-    """Verify a Google ID token against Google's published keys."""
-    import jwt as _jwt
-
-    if not GOOGLE_CLIENT_IDS:
-        raise HTTPException(
-            status_code=503,
-            detail="Google Sign-In isn't configured. Set GOOGLE_CLIENT_IDS.",
-        )
-    try:
-        kid = _jwt.get_unverified_header(id_token).get("kid")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Malformed Google identity token")
-    if not kid:
-        raise HTTPException(status_code=401, detail="Missing kid in Google token")
-
-    await _load_google_jwks()
-    key = _GOOGLE_JWKS.get(kid)
-    if key is None:
-        # Google rotates keys; refetch once before giving up.
-        await _load_google_jwks(force=True)
-        key = _GOOGLE_JWKS.get(kid)
-        if key is None:
-            raise HTTPException(status_code=401, detail="Unknown signing key")
-
-    try:
-        return _jwt.decode(
-            id_token,
-            key=key.key,
-            algorithms=["RS256"],
-            audience=list(GOOGLE_CLIENT_IDS),
-            issuer=list(GOOGLE_ISSUERS),
-            options={"require": ["exp", "iat", "iss", "aud", "sub"]},
-        )
-    except _jwt.InvalidAudienceError:
-        raise HTTPException(status_code=401, detail="Token was issued for another app")
-    except _jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Google token expired")
-    except Exception:
-        logger.exception("Google token verification failed")
-        raise HTTPException(status_code=401, detail="Invalid Google identity token")
 
 
 @router.get("/")
@@ -192,37 +125,74 @@ async def root():
     return {"service": "Explore91", "status": "ok"}
 
 
-@router.post("/auth/google", response_model=AuthResponse)
-async def google_sign_in(payload: GoogleSignIn, request: Request):
-    """Exchange a Google ID token for an Explore91 session."""
-    await rate_limit("google_auth", client_key(request), limit=20, window_sec=60)
-    claims = await _verify_google_id_token(payload.id_token)
+async def _require_dev_auth() -> None:
+    """404 unless the dev gate is open.
 
-    email = claims.get("email")
-    if not email:
-        raise HTTPException(status_code=401, detail="Google token carries no email")
-    if claims.get("email_verified") is False:
-        raise HTTPException(status_code=401, detail="Google email is not verified")
+    A dependency rather than the first line of the handler because FastAPI
+    validates the request body before the handler runs: as an inline check,
+    a malformed body answered 422 on a disabled instance, confirming both
+    that the route exists and what it expects. Dependencies are resolved
+    first, so raising here makes a disabled endpoint indistinguishable from
+    one that was never registered, whatever is posted to it.
+    """
+    if not dev_auth_enabled():
+        raise HTTPException(status_code=404, detail="Not Found")
 
-    name = claims.get("name") or email.split("@")[0]
-    picture = claims.get("picture")
-    session_token = f"g_{uuid.uuid4().hex}{uuid.uuid4().hex}"
+
+@router.post(
+    "/auth/dev",
+    response_model=AuthResponse,
+    dependencies=[Depends(_require_dev_auth)],
+)
+async def dev_sign_in(payload: DevSignIn, request: Request):
+    """Issue a session for whatever email is in the body. Development only.
+
+    This replaces Google Sign-In until OTP sign-in exists. Nothing is
+    verified -- there is no credential to verify -- so anything that can
+    reach this route can sign in as anybody, including an ADMIN_EMAILS
+    address that can then self-grant admin via /auth/roles.
+
+    Hence the 404 when DEV_AUTH_ENABLED is unset: not a 403, so a production
+    deployment does not confirm the route is there. The gate is the
+    _require_dev_auth dependency above, which resolves before the body is
+    validated -- so a disabled instance also does no database work, and
+    leaks no schema, on an unauthenticated request.
+
+    Returning users keep their account: this matches on email and reuses the
+    existing record, so user_id, wallet_points, roles and home_city survive.
+    That is the same rule Google used, which means accounts created under
+    Google still resolve here, and will still resolve when OTP replaces this.
+    """
+    await rate_limit("dev_auth", client_key(request), limit=20, window_sec=60)
+
+    email = payload.email.strip().lower()
+    name = (payload.name or "").strip() or email.split("@")[0]
+
+    # Audit trail. If this ever appears in a production log, the gate was set
+    # on a service where it should not have been.
+    logger.warning("DEV SIGN-IN: issuing a session for %s, no credential checked", email)
+
+    # The prefix makes these identifiable in user_sessions, so they can be
+    # found and purged when real sign-in lands.
+    session_token = f"dev_{uuid.uuid4().hex}{uuid.uuid4().hex}"
+    now = datetime.now(timezone.utc)
 
     existing = await db.users.find_one({"email": email}, {"_id": 0})
-    now = datetime.now(timezone.utc)
     if existing:
         user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id}, {"$set": {"name": name, "picture": picture}}
-        )
-        user_doc = {**existing, "name": name, "picture": picture}
+        # Only fill a blank name; never overwrite one the user has set.
+        if payload.name and not existing.get("name"):
+            await db.users.update_one({"user_id": user_id}, {"$set": {"name": name}})
+            user_doc = {**existing, "name": name}
+        else:
+            user_doc = existing
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_doc = {
             "user_id": user_id,
             "email": email,
             "name": name,
-            "picture": picture,
+            "picture": None,
             "wallet_points": 500,
             "home_city": "Goa",
             "roles": ["customer"],

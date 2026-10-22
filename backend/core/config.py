@@ -10,17 +10,6 @@ load_dotenv(ROOT_DIR / ".env")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
-GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
-GOOGLE_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
-
-# OAuth client IDs that may sign in to this app. One per platform, from the
-# Google Cloud console. A token minted for any other client is rejected, which
-# is what stops someone replaying a Google token from an unrelated app.
-GOOGLE_CLIENT_IDS = {
-    c.strip()
-    for c in (os.environ.get("GOOGLE_CLIENT_IDS", "") or "").split(",")
-    if c.strip()
-}
 APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_ISSUER = "https://appleid.apple.com"
 APPLE_AUDIENCES = {
@@ -29,6 +18,27 @@ APPLE_AUDIENCES = {
     if a.strip()
 }
 SESSION_TTL_DAYS = 7
+
+
+def dev_auth_enabled() -> bool:
+    """Whether /auth/dev will mint a session.
+
+    /auth/dev is a placeholder standing in for Google Sign-In until OTP
+    lands. It takes an email and nothing else, so anything that can reach it
+    can sign in as anybody -- including an address in ADMIN_EMAILS, which can
+    then self-grant admin through /auth/roles. It is a complete
+    authentication bypass by design.
+
+    So it is off unless this is explicitly set, and the route answers 404
+    rather than advertising itself. Read from the environment on every call,
+    not captured at import, so a test can switch it without reloading the
+    module -- and so nobody can leave it on by having imported this early.
+
+    Never set DEV_AUTH_ENABLED on the production service.
+    """
+    return (os.environ.get("DEV_AUTH_ENABLED", "") or "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
 
 # Emails allowed to self-grant "admin" role via /auth/roles.
 ADMIN_EMAILS = {

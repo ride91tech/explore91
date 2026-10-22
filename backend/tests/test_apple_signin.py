@@ -58,8 +58,8 @@ def _as_fresh_client() -> dict:
     return {"X-Forwarded-For": "198.51.100." + str(random.randint(2, 250))}
 
 
-def _as_dedicated_client() -> dict:
-    """Headers for a caller whose rate-limit bucket is its own.
+def _dedicated_ip() -> str:
+    """An address whose rate-limit bucket belongs to one test alone.
 
     Deliberately from a different reserved block than _as_fresh_client, which
     draws at random from 198.51.100.0/24. The limiter buckets on address
@@ -68,11 +68,16 @@ def _as_dedicated_client() -> dict:
     moves the 429 a call earlier. With ~20 other calls over 249 addresses
     that happened often enough to fail about one serial run in three.
 
-    Still randomised within the block, because the window is 60s of wall
-    clock and two runs started inside one window would otherwise share a
-    bucket and find it already full.
+    Drawn from 10.0.0.0/8 rather than a documentation /24 because the space
+    has to be big enough that two runs inside one 60s window do not land on
+    the same address: a /24 gives 249 of them, which failed about once in
+    every few hundred runs, and the failure looks exactly like a limiter
+    off-by-one. Sixteen million makes it a non-event. The limiter only ever
+    uses this as an opaque bucket key.
     """
-    return {"X-Forwarded-For": "203.0.113." + str(random.randint(2, 250))}
+    return "10.{}.{}.{}".format(
+        random.randint(0, 255), random.randint(0, 255), random.randint(1, 254)
+    )
 
 
 
@@ -160,7 +165,7 @@ class TestAppleSignInErrorPaths:
         mid-burst so no 429 ever arrives. Neither outcome says anything about
         the limiter. The name still sorts last, which no longer matters.
         """
-        client = _as_dedicated_client()
+        client = {"X-Forwarded-For": _dedicated_ip()}
         garbage = "nope.nope.nope"
         statuses = []
         retry_after = None
@@ -523,10 +528,10 @@ class TestRegressionSpotCheck:
         assert r.status_code == 200
         assert r.json().get("status") == "ok"
 
-    def test_google_endpoint_rejects_bad_token(self):
+    def test_google_endpoint_is_gone(self):
         r = requests.post(f"{BASE_URL}/api/auth/google",
                           json={"id_token": "not-a-real-token"}, timeout=15)
-        assert r.status_code in (401, 503)
+        assert r.status_code == 404
 
     def test_businesses_filter_by_city(self):
         r = requests.get(f"{BASE_URL}/api/businesses?city=goa&limit=20", timeout=15)

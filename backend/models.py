@@ -20,8 +20,32 @@ class User(BaseModel):
     created_at: datetime
 
 
-class GoogleSignIn(BaseModel):
-    id_token: str = Field(min_length=8, max_length=4096)
+class DevSignIn(BaseModel):
+    """Body for /auth/dev -- the placeholder standing in for Google Sign-In.
+
+    The pattern is a deliberately loose email shape, not full RFC validation:
+    pydantic's EmailStr would pull in email-validator, and CI checks that the
+    runtime requirements install the app on their own. It only has to reject
+    obvious nonsense, since the address is not verified anyway.
+    """
+
+    email: str = Field(
+        min_length=3,
+        max_length=254,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+    name: Optional[str] = Field(default=None, max_length=120)
+
+    @field_validator("email", "name", mode="before")
+    @classmethod
+    def _trim(cls, v):
+        """Strip before the pattern runs.
+
+        Field patterns are checked after before-validators, so without this a
+        trailing space -- which a phone keyboard adds readily -- fails
+        validation instead of being tidied up.
+        """
+        return v.strip() if isinstance(v, str) else v
 
 
 class AuthResponse(BaseModel):

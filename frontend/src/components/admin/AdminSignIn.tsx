@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  TextInput,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -22,6 +23,30 @@ export function AdminSignIn() {
   const router = useRouter();
   const [ensuring, setEnsuring] = useState(false);
   const [ensureErr, setEnsureErr] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInErr, setSignInErr] = useState<string | null>(null);
+
+  // Mirrors the backend's DevSignIn pattern so the button disables instead of
+  // the server answering 422.
+  const emailReady = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()) && !signingIn;
+
+  const handleSignIn = async () => {
+    if (!emailReady) return;
+    setSignInErr(null);
+    setSigningIn(true);
+    try {
+      await signIn(email.trim());
+    } catch (e: any) {
+      setSignInErr(
+        e?.status === 404
+          ? "Sign-in isn't switched on for this server (DEV_AUTH_ENABLED is unset)."
+          : e?.message ?? "Could not sign in."
+      );
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
   const isAdmin = user?.roles?.includes("admin");
 
@@ -87,16 +112,42 @@ export function AdminSignIn() {
             <>
               <Text style={styles.h1}>Sign in</Text>
               <Text style={styles.sub}>
-                Use your Google account to sign in to the Explore91 admin console. Access is limited to allowlisted operators.
+                Enter the email on the operator allowlist. Access to this console still
+                requires the <Text style={styles.code}>admin</Text> role, granted in the
+                next step.
               </Text>
+              <TextInput
+                testID="admin-signin-email"
+                value={email}
+                onChangeText={(t) => { setEmail(t); setSignInErr(null); }}
+                placeholder="operator@explore91.com"
+                placeholderTextColor={colors.onSurfaceTertiary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                returnKeyType="go"
+                onSubmitEditing={handleSignIn}
+                editable={!signingIn}
+                style={styles.input}
+              />
               <Pressable
-                testID="admin-google-signin"
-                onPress={() => signIn()}
-                style={styles.googleBtn}
+                testID="admin-signin-continue"
+                onPress={handleSignIn}
+                disabled={!emailReady}
+                style={[styles.cta, !emailReady && { opacity: 0.45 }]}
               >
-                <Ionicons name="logo-google" size={18} color={colors.onSurface} />
-                <Text style={styles.googleText}>Continue with Google</Text>
+                {signingIn ? (
+                  <ActivityIndicator color={colors.onSurface} />
+                ) : (
+                  <Text style={styles.ctaText}>Continue</Text>
+                )}
               </Pressable>
+              {signInErr ? <Text style={styles.err}>{signInErr}</Text> : null}
+              <Text style={styles.helper}>
+                Temporary sign-in — no password, nothing verified. One-time passcodes are
+                coming.
+              </Text>
               <View style={styles.divider} />
               <Text style={styles.helper}>
                 Are you a customer? Return to the{" "}
@@ -220,8 +271,19 @@ const styles = StyleSheet.create({
   h1: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 8, lineHeight: 22 },
 
-  googleBtn: {
-    marginTop: 28,
+  input: {
+    marginTop: 24,
+    height: 52,
+    borderRadius: radius.pill,
+    paddingHorizontal: 18,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.onSurface,
+    fontSize: 15,
+  },
+  cta: {
+    marginTop: 12,
     height: 52,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
@@ -232,7 +294,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
-  googleText: { color: colors.onSurface, fontSize: 16, fontWeight: "700" },
+  ctaText: { color: colors.onSurface, fontSize: 16, fontWeight: "700" },
 
   checkIcon: {
     width: 48, height: 48, borderRadius: 24,

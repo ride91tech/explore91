@@ -8,12 +8,18 @@
 
 ## 1. Read this before approving
 
-**After this deploy, nobody can sign in — at all — until the Google OAuth
-clients exist.**
+**After this deploy, nobody can sign in — at all.**
 
-`/auth/session` is deleted in this release, and `/auth/google` returns **503**
-while `GOOGLE_CLIENT_IDS` is unset. So the swap is not "old login → new
-login", it is "old login → no login" for however long the console work takes.
+Google Sign-In has since been removed entirely, replaced by `/auth/dev`, a
+placeholder that takes an email and issues a session without verifying
+anything. It answers **404** unless `DEV_AUTH_ENABLED` is set, and that
+variable must never be set on this service — anyone who could reach it could
+sign in as any account, including an `ADMIN_EMAILS` address that can then
+self-grant admin.
+
+So the swap is "old login → no login" until OTP sign-in is built. Apple
+Sign-In is still present and still returns 503 while `APPLE_AUDIENCES` is
+unset, so it is not a way in either.
 
 That is survivable if nobody is using the app yet. It is not if they are, and
 I cannot tell you which: `backend/.env` points at localhost, and I am
@@ -32,7 +38,7 @@ unless you know there are no real users yet.
 
 | | |
 |---|---|
-| Auth | `/auth/session` removed; `/auth/google` + `/auth/apple` verify ID tokens against provider JWKS |
+| Auth | `/auth/session` and `/auth/google` removed; `/auth/apple` verifies ID tokens against Apple's JWKS; `/auth/dev` is 404 unless `DEV_AUTH_ENABLED` |
 | Security | Rate limiting moved to a shared store and no longer bypassable via `X-Forwarded-For`; session tokens hashed at rest |
 | Public web | `/place/{slug}`, `/city/{slug}`, `/sitemap.xml`, `/robots.txt`, deep-link association files |
 | Data | Place slugs, `place_interest`, new indexes, 28-state geography |
@@ -44,7 +50,7 @@ which is what makes the rollback in §6 safe.
 **Session continuity:** existing sessions keep working. Validation is
 independent of how a session was created, and pre-hash rows are upgraded
 atomically on first use rather than invalidated. Returning users keep their
-account — `/auth/google` matches on email and reuses the existing record,
+account — sign-in matches on email and reuses the existing record,
 preserving `user_id`, `wallet_points`, `roles` and `home_city`.
 
 ---
@@ -59,7 +65,7 @@ Four are new. Deploying without them is not fatal but degrades behaviour.
 | `TRUSTED_PROXY_HOPS` | `1` | Defaults to 1 anyway; set it explicitly so it is visible |
 | `ALLOWED_ORIGINS` | the admin console origin, once deployed | Stays `*` — open to any origin |
 | `ANDROID_CERT_FINGERPRINTS` | the debug + upload SHA-256 pair | `assetlinks.json` serves `[]`; deep links will not verify |
-| `GOOGLE_CLIENT_IDS` | **all four client IDs** | `/auth/google` returns 503 — no login |
+| `DEV_AUTH_ENABLED` | **do not set it** | Correct. Setting it opens an unauthenticated route that mints sessions for any email |
 
 ---
 
@@ -154,7 +160,8 @@ Against the tagged revision before any traffic, then again at 100%.
 | 6 | `GET /sitemap.xml` | 200, 3 cities listed, empty ones absent |
 | 7 | `GET /.well-known/assetlinks.json` | 200, fingerprints present |
 | 8 | `POST /api/auth/session` | **404** — confirms the old endpoint is gone |
-| 9 | `POST /api/auth/google` with junk | **503** without client IDs, **401** with them |
+| 9 | `POST /api/auth/google` with junk | **404** — the provider is gone |
+| 9b | `POST /api/auth/dev` with any email | **404** — the gate is shut. A 200 here means stop and unset `DEV_AUTH_ENABLED` |
 | 10 | `GET /api/auth/me` with an existing session token | **200** — continuity held |
 | 11 | `GET /api/admin/stats` without a token | 401 |
 

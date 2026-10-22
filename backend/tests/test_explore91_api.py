@@ -136,14 +136,18 @@ class TestNearby:
 
 # ---- Auth (unauthenticated) -----------------------------------------------
 class TestAuthUnauth:
-    def test_google_rejects_bogus_token(self, api_client, base_url):
+    def test_google_endpoint_is_gone(self, api_client, base_url):
+        """Google Sign-In was removed; /auth/dev stands in until OTP lands.
+
+        Asserted rather than deleted so the route cannot quietly return: a
+        half-removed provider that still mints sessions is worse than either
+        having it or not.
+        """
         r = api_client.post(
             f"{base_url}/api/auth/google",
             json={"id_token": "not.a.real.token"},
         )
-        # 401 once Google Sign-In is configured, 503 before then — either way a
-        # junk token never yields a session.
-        assert r.status_code in (401, 503)
+        assert r.status_code == 404
 
     def test_third_party_session_endpoint_is_gone(self, api_client, base_url):
         """Login no longer routes through anyone else's server."""
