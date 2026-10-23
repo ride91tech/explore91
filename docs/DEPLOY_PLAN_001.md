@@ -65,7 +65,7 @@ Four are new. Deploying without them is not fatal but degrades behaviour.
 | `TRUSTED_PROXY_HOPS` | `1` | Defaults to 1 anyway; set it explicitly so it is visible |
 | `ALLOWED_ORIGINS` | the admin console origin, once deployed | Stays `*` — open to any origin |
 | `ANDROID_CERT_FINGERPRINTS` | the debug + upload SHA-256 pair | `assetlinks.json` serves `[]`; deep links will not verify |
-| `DEV_AUTH_ENABLED` | **do not set it** | Correct. Setting it opens an unauthenticated route that mints sessions for any email |
+| `DEV_AUTH_ENABLED` | `true` — **set deliberately, 2026-10-24** | Unset is the safe default. See the note below |
 
 ---
 
@@ -161,7 +161,7 @@ Against the tagged revision before any traffic, then again at 100%.
 | 7 | `GET /.well-known/assetlinks.json` | 200, fingerprints present |
 | 8 | `POST /api/auth/session` | **404** — confirms the old endpoint is gone |
 | 9 | `POST /api/auth/google` with junk | **404** — the provider is gone |
-| 9b | `POST /api/auth/dev` with any email | **404** — the gate is shut. A 200 here means stop and unset `DEV_AUTH_ENABLED` |
+| 9b | `POST /api/auth/dev` with any email | **200 while the test window is open** (see §10); **404** once it is closed, which is the state to return to |
 | 10 | `GET /api/auth/me` with an existing session token | **200** — continuity held |
 | 11 | `GET /api/admin/stats` without a token | 401 |
 
@@ -194,3 +194,41 @@ gcloud run services logs read explore91-api --project explore91 \
 2. **Values for the env vars in §3** that you want set now.
 3. **Whether to skip the Atlas backup check** if you consider the data
    disposable at this stage. I will not skip it unless you say so.
+
+---
+
+## 10. The open test window — `DEV_AUTH_ENABLED=true`
+
+**Set on production 2026-10-24, deliberately, so a test APK has a working
+login.** Recording it here because every other line in this document says not
+to, and a future reader following those lines would switch it off without
+knowing it was a decision.
+
+What it means while it is on:
+
+- Anyone who knows the API URL can `POST /api/auth/dev` with any email and
+  get a valid session. There is no credential.
+- `ADMIN_EMAILS` is `valencio@ride91.green`. Signing in as that address and
+  calling `POST /auth/roles` grants admin, which is the whole admin console
+  over the real `explore91` database.
+- The URL is not secret: it is compiled into every APK.
+
+To close it:
+
+```bash
+gcloud run services update explore91-api --project explore91   --region asia-south1 --remove-env-vars DEV_AUTH_ENABLED
+```
+
+To close only the admin escalation while leaving consumer sign-in working —
+the admin console is web-only, so this costs nothing for testing from a
+phone:
+
+```bash
+gcloud run services update explore91-api --project explore91   --region asia-south1 --remove-env-vars ADMIN_EMAILS
+```
+
+Either takes effect on the next revision, within about a minute. Afterwards,
+sessions already issued stay valid until they expire (7 days) or
+`user_sessions` is cleared; dev-issued tokens are the ones whose
+`session_token` digest belongs to a token starting `dev_`, and the
+accompanying users are whatever emails were typed into the login screen.
