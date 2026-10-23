@@ -15,6 +15,7 @@ from typing import Dict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import ValidationError
 
 from core.config import (
     ADMIN_EMAILS,
@@ -144,7 +145,7 @@ async def _require_dev_auth() -> None:
     response_model=AuthResponse,
     dependencies=[Depends(_require_dev_auth)],
 )
-async def dev_sign_in(payload: DevSignIn, request: Request):
+async def dev_sign_in(request: Request):
     """Issue a session for whatever email is in the body. Development only.
 
     This replaces Google Sign-In until OTP sign-in exists. Nothing is
@@ -153,10 +154,16 @@ async def dev_sign_in(payload: DevSignIn, request: Request):
     address that can then self-grant admin via /auth/roles.
 
     Hence the 404 when DEV_AUTH_ENABLED is unset: not a 403, so a production
-    deployment does not confirm the route is there. The gate is the
-    _require_dev_auth dependency above, which resolves before the body is
-    validated -- so a disabled instance also does no database work, and
-    leaks no schema, on an unauthenticated request.
+    deployment does not confirm the route is there.
+
+    The body is taken as a raw Request and parsed below rather than declared
+    as a `payload: DevSignIn` parameter, which is the only way the 404 holds
+    for every request. FastAPI reads and parses the body BEFORE it resolves
+    dependencies, so with a declared body model an unparseable body answered
+    422 while a route that genuinely did not exist answered 404 -- which told
+    an unauthenticated caller the route was there. With no body field on the
+    dependant, FastAPI skips that read entirely and the gate is reached first
+    whatever is posted.
 
     Returning users keep their account: this matches on email and reuses the
     existing record, so user_id, wallet_points, roles and home_city survive.
@@ -164,6 +171,22 @@ async def dev_sign_in(payload: DevSignIn, request: Request):
     Google still resolve here, and will still resolve when OTP replaces this.
     """
     await rate_limit("dev_auth", client_key(request), limit=20, window_sec=60)
+
+    try:
+        raw = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Body must be a JSON object")
+    try:
+        payload = DevSignIn.model_validate(raw)
+    except ValidationError as exc:
+        # Shaped like FastAPI's own 422 so the client sees nothing unusual.
+        raise HTTPException(
+            status_code=422,
+            detail=[
+                {"loc": list(e.get("loc", ())), "msg": e.get("msg", "invalid")}
+                for e in exc.errors()
+            ],
+        )
 
     email = payload.email.strip().lower()
     name = (payload.name or "").strip() or email.split("@")[0]

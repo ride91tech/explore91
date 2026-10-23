@@ -66,6 +66,13 @@ def _as_fresh_client() -> dict:
     return {"X-Forwarded-For": "198.51.100." + str(random.randint(2, 250))}
 
 
+# Note for everything below: the rate limiter now runs BEFORE the body is
+# parsed, because the body has to be read inside the handler for the gate to
+# come first. So a malformed or invalid request consumes an allowance where it
+# used to be rejected for free -- which is the right behaviour for a public
+# endpoint, and means even the tests that expect a 422 need their own client.
+
+
 def _dev_post(client, body: dict):
     """POST /auth/dev as a fresh client, insisting on a 200.
 
@@ -152,6 +159,33 @@ class TestDisabledByDefault:
             r = client.post("/api/auth/dev", json={"not_an_email_field": 1})
         assert r.status_code == 404
 
+    def test_unparseable_body_is_also_404(self, app_without_dev_auth):
+        """The 404 has to hold for a body that is not JSON at all.
+
+        This is the case a declared `payload: DevSignIn` parameter could not
+        cover: FastAPI reads the body before resolving dependencies, so junk
+        bytes answered 422 while a route that did not exist answered 404 --
+        enough to tell an unauthenticated caller the route was there. Found
+        on a deployed revision by a smoke test with a quoting bug in it, not
+        by the test above, which sends valid JSON with the wrong field.
+        """
+        with TestClient(app_without_dev_auth.app) as client:
+            r = client.post(
+                "/api/auth/dev",
+                content=b"not json at all",
+                headers={"Content-Type": "application/json"},
+            )
+        assert r.status_code == 404, r.text
+
+    def test_matches_a_route_that_does_not_exist(self, app_without_dev_auth):
+        """Same status and body as a genuinely absent route, byte for byte."""
+        with TestClient(app_without_dev_auth.app) as client:
+            kw = dict(content=b"not json at all",
+                      headers={"Content-Type": "application/json"})
+            shut = client.post("/api/auth/dev", **kw)
+            absent = client.post("/api/auth/no-such-route", **kw)
+        assert (shut.status_code, shut.text) == (absent.status_code, absent.text)
+
     @pytest.mark.parametrize("value", ["", "false", "0", "no", "off", "maybe"])
     def test_only_an_affirmative_value_opens_it(self, monkeypatch, value):
         """Anything that is not clearly a yes leaves the gate shut."""
@@ -226,12 +260,24 @@ class TestEnabled:
     @pytest.mark.parametrize("bad", ["", "nope", "no@domain", "a b@c.de", "@x.com"])
     def test_rejects_junk_identifiers(self, app_with_dev_auth, bad):
         with TestClient(app_with_dev_auth.app) as client:
-            r = client.post("/api/auth/dev", json={"email": bad})
+            r = client.post(
+                "/api/auth/dev", json={"email": bad}, headers=_as_fresh_client()
+            )
+        assert r.status_code == 422, r.text
+
+    def test_unparseable_body_is_422_when_open(self, app_with_dev_auth):
+        """Past the gate, junk is a client error again -- not a 500."""
+        with TestClient(app_with_dev_auth.app) as client:
+            r = client.post(
+                "/api/auth/dev",
+                content=b"not json at all",
+                headers={"Content-Type": "application/json", **_as_fresh_client()},
+            )
         assert r.status_code == 422, r.text
 
     def test_missing_field_is_422(self, app_with_dev_auth):
         with TestClient(app_with_dev_auth.app) as client:
-            r = client.post("/api/auth/dev", json={})
+            r = client.post("/api/auth/dev", json={}, headers=_as_fresh_client())
         assert r.status_code == 422
 
 
