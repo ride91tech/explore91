@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useAuth } from "@/src/auth";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, fonts, radius, spacing } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1685271552630-9bc169185566?crop=entropy&cs=srgb&fm=jpg&w=1600&q=85";
 
@@ -80,7 +80,7 @@ export default function Login() {
     <View style={styles.container}>
       <Image source={{ uri: HERO }} style={{ width, height }} contentFit="cover" />
       <LinearGradient
-        colors={["rgba(17,17,17,0.15)", "rgba(17,17,17,0.55)", "rgba(17,17,17,0.95)"]}
+        colors={["rgba(14,22,15,0.15)", "rgba(14,22,15,0.55)", "rgba(14,22,15,0.95)"]}
         locations={[0, 0.5, 1]}
         style={StyleSheet.absoluteFill}
       />
@@ -164,11 +164,11 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   top: { position: "absolute", top: 0, left: 0, right: 0, alignItems: "flex-start", paddingHorizontal: spacing.xl },
-  brand: { color: "#FFF", fontSize: 14, letterSpacing: 4, fontWeight: "800" },
+  brand: { color: "#FFF", fontSize: 14, letterSpacing: 4, fontFamily: fonts.display },
   tag: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginTop: 4, letterSpacing: 1 },
   kav: { position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "85%" },
   bottom: { paddingHorizontal: spacing.xl },
-  h1: { color: "#FFF", fontSize: 34, fontWeight: "800", letterSpacing: -0.8, lineHeight: 40 },
+  h1: { color: "#FFF", fontSize: 34, fontFamily: fonts.display, letterSpacing: -0.8, lineHeight: 40 },
   sub: { color: "rgba(255,255,255,0.85)", fontSize: 15, lineHeight: 22, marginTop: spacing.md },
   input: {
     marginTop: spacing.xl,
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   ctaDisabled: { opacity: 0.45 },
-  ctaText: { color: colors.onSurface, fontSize: 16, fontWeight: "700" },
+  ctaText: { color: colors.onSurface, fontSize: 16, fontFamily: fonts.bodyBold },
   devNote: {
     color: "rgba(255,255,255,0.65)",
     fontSize: 12,

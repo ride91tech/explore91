@@ -14,7 +14,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
 import { api, CityT, CityGroupT } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 /** A city is browsable once it has businesses — the home screen is built from
  *  them, so without any it renders empty carousels. `is_live` is absent on
@@ -91,7 +91,7 @@ export default function CityPicker() {
                 >
                   <Image source={{ uri: c.image }} style={StyleSheet.absoluteFill} contentFit="cover" />
                   <LinearGradient
-                    colors={["rgba(17,17,17,0.15)", "rgba(17,17,17,0.9)"]}
+                    colors={["rgba(14,22,15,0.15)", "rgba(14,22,15,0.9)"]}
                     style={StyleSheet.absoluteFill}
                   />
                   <View style={styles.cityInfo}>
@@ -137,11 +137,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   close: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  title: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
 
   regionHead: {
     fontSize: tType.sm,
-    fontWeight: "700",
+    fontFamily: fonts.bodyBold,
     color: colors.onSurfaceSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.8,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   cityInfo: { padding: spacing.lg },
-  cityName: { color: "#FFF", fontSize: 28, fontWeight: "800", letterSpacing: -0.6 },
+  cityName: { color: "#FFF", fontSize: 28, fontFamily: fonts.display, letterSpacing: -0.6 },
   cityTag: { color: "rgba(255,255,255,0.85)", fontSize: tType.base, marginTop: 2 },
   currentBadge: {
     position: "absolute",
@@ -168,9 +168,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
-  currentText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  currentText: { color: "#FFF", fontSize: 11, fontFamily: fonts.bodyBold },
 
-  comingSoonHead: { marginTop: spacing.xl, fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  comingSoonHead: { marginTop: spacing.xl, fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface },
   comingSoonRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   soonChip: {
     flexDirection: "row",
@@ -181,5 +181,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     alignItems: "center",
   },
-  soonText: { fontSize: tType.sm, color: colors.onSurfaceSecondary, fontWeight: "600" },
+  soonText: { fontSize: tType.sm, color: colors.onSurfaceSecondary, fontFamily: fonts.bodySemi },
 });

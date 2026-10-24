@@ -13,7 +13,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, Booking } from "@/src/api";
 import { useAction } from "@/src/components/Toast";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 /** A booking is upcoming only until its date has passed — status alone isn't enough. */
 function isUpcoming(b: Booking): boolean {
@@ -186,18 +186,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  headerTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
 
-  section: { fontSize: tType.xl, fontWeight: "700", color: colors.onSurface, letterSpacing: -0.3 },
+  section: { fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.3 },
 
   card: { borderRadius: radius.md, backgroundColor: colors.surfaceSecondary, overflow: "hidden" },
   cardMain: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md },
   image: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
-  title: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  title: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
   meta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 6 },
-  status: { fontSize: tType.sm, fontWeight: "700" },
-  amount: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurface },
+  status: { fontSize: tType.sm, fontFamily: fonts.bodyBold },
+  amount: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.onSurface },
 
   cancel: {
     height: 44,
@@ -206,9 +206,9 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderStrong,
   },
-  cancelText: { color: colors.error, fontSize: tType.base, fontWeight: "700" },
+  cancelText: { color: colors.error, fontSize: tType.base, fontFamily: fonts.bodyBold },
 
   empty: { alignItems: "center", paddingTop: spacing.xxxl * 2, paddingHorizontal: spacing.xl },
-  emptyTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface, marginTop: spacing.md },
+  emptyTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface, marginTop: spacing.md },
   emptySub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 4, textAlign: "center" },
 });

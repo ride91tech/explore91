@@ -11,7 +11,7 @@ import {
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useFocusEffect } from "expo-router";
 import { api, Business } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type Staff = { staff_id: string; business_id: string; name: string; role: string };
 
@@ -185,8 +185,8 @@ export default function OwnerStaff() {
 }
 
 const styles = StyleSheet.create({
-  eyebrow: { fontSize: 11, fontWeight: "800", color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
-  h1: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
+  eyebrow: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
+  h1: { fontSize: 28, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 4 },
 
   form: {
@@ -196,11 +196,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.divider,
   },
-  formTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  formTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
   formRow: { flexDirection: "row", flexWrap: "wrap" as any, gap: spacing.lg },
   label: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.bodyBold,
     color: colors.onSurfaceTertiary,
     letterSpacing: 1,
     textTransform: "uppercase",
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     maxWidth: 220,
   },
   chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  chipText: { fontSize: tType.sm, fontWeight: "600", color: colors.onSurface },
+  chipText: { fontSize: tType.sm, fontFamily: fonts.bodySemi, color: colors.onSurface },
   chipTextActive: { color: "#FFF" },
 
   addBtn: {
@@ -240,9 +240,9 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     paddingHorizontal: 24,
   },
-  addBtnText: { color: "#FFF", fontSize: tType.base, fontWeight: "700" },
+  addBtnText: { color: "#FFF", fontSize: tType.base, fontFamily: fonts.bodyBold },
 
-  section: { fontSize: tType.xl, fontWeight: "700", color: colors.onSurface },
+  section: { fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface },
   row: {
     flexDirection: "row",
     padding: spacing.md,
@@ -254,8 +254,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
-  name: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  avatarText: { color: "#FFF", fontSize: 16, fontFamily: fonts.bodyBold },
+  name: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
   meta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   emptyText: { color: colors.onSurfaceTertiary, marginTop: spacing.md, fontSize: tType.base },
 });

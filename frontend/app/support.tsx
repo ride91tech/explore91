@@ -15,7 +15,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { useAction } from "@/src/components/Toast";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type Ticket = {
   ticket_id: string;
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  headerTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
 
   lede: { fontSize: tType.base, color: colors.onSurfaceTertiary, lineHeight: 21 },
 
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surfaceSecondary,
   },
-  label: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: 6 },
+  label: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, marginBottom: 6 },
   input: {
     minHeight: 46,
     borderRadius: radius.sm,
@@ -217,15 +217,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  submitText: { color: "#FFF", fontSize: tType.lg, fontWeight: "700" },
+  submitText: { color: "#FFF", fontSize: tType.lg, fontFamily: fonts.bodyBold },
 
   section: {
-    fontSize: tType.xl, fontWeight: "700", color: colors.onSurface,
+    fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface,
     letterSpacing: -0.3, marginTop: spacing.xxl,
   },
 
   empty: { alignItems: "center", paddingVertical: spacing.xxl },
-  emptyTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface, marginTop: spacing.md },
+  emptyTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface, marginTop: spacing.md },
   emptySub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 4, textAlign: "center" },
 
   ticket: {
@@ -236,9 +236,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   ticketHead: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
-  ticketSubject: { flex: 1, fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  ticketSubject: { flex: 1, fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface },
   pill: { paddingHorizontal: 10, height: 24, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
-  pillText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  pillText: { color: "#FFF", fontSize: 11, fontFamily: fonts.bodyBold },
   ticketDate: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 4 },
   ticketBody: { fontSize: tType.base, color: colors.onSurfaceSecondary, marginTop: spacing.md, lineHeight: 21 },
   reply: {
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
   },
   replyLabel: {
-    fontSize: 11, fontWeight: "700", color: colors.onSurfaceTertiary,
+    fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary,
     textTransform: "uppercase", letterSpacing: 1,
   },
   replyText: { fontSize: tType.base, color: colors.onSurface, marginTop: 4, lineHeight: 21 },

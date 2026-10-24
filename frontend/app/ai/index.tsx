@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/src/auth";
 import { api, Business } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 const MOODS = ["Romantic", "Adventurous", "Relaxed", "Party", "Family", "Foodie"];
 const BUDGETS = [
@@ -131,7 +131,7 @@ export default function AIConcierge() {
               >
                 <Image source={{ uri: p.business.cover_image }} style={StyleSheet.absoluteFill} contentFit="cover" />
                 <LinearGradient
-                  colors={["rgba(17,17,17,0.15)", "rgba(17,17,17,0.9)"]}
+                  colors={["rgba(14,22,15,0.15)", "rgba(14,22,15,0.9)"]}
                   style={StyleSheet.absoluteFill}
                 />
                 <View style={styles.pickBadge}>
@@ -199,24 +199,24 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   close: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  headerTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
   itinBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, height: 36, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary },
-  itinBtnText: { fontSize: tType.sm, fontWeight: "700", color: colors.brandPrimary },
+  itinBtnText: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.brandPrimary },
 
-  h1: { fontSize: 26, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 },
+  h1: { fontSize: 26, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: spacing.sm, lineHeight: 22 },
-  sectionLabel: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1, marginBottom: spacing.sm },
+  sectionLabel: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1, marginBottom: spacing.sm },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { paddingHorizontal: 14, height: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  chipText: { fontSize: tType.base, fontWeight: "600", color: colors.onSurface },
+  chipText: { fontSize: tType.base, fontFamily: fonts.bodySemi, color: colors.onSurface },
   chipTextActive: { color: "#FFF" },
 
   cta: { marginTop: spacing.xxl, height: 54, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
-  ctaText: { color: "#FFF", fontSize: tType.lg, fontWeight: "700" },
+  ctaText: { color: "#FFF", fontSize: tType.lg, fontFamily: fonts.bodyBold },
 
   pickHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
-  reset: { color: colors.brandPrimary, fontWeight: "700", fontSize: tType.base },
+  reset: { color: colors.brandPrimary, fontFamily: fonts.bodyBold, fontSize: tType.base },
   pickCard: {
     height: 200,
     borderRadius: radius.lg,
@@ -225,9 +225,9 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   pickBadge: { position: "absolute", top: spacing.md, left: spacing.md, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.brandTertiary, paddingHorizontal: 10, height: 26, borderRadius: radius.pill },
-  pickBadgeText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  pickBadgeText: { color: "#FFF", fontSize: 11, fontFamily: fonts.bodyBold },
   pickInfo: { padding: spacing.lg },
-  pickName: { color: "#FFF", fontSize: tType.xl, fontWeight: "800", letterSpacing: -0.3 },
+  pickName: { color: "#FFF", fontSize: tType.xl, fontFamily: fonts.display, letterSpacing: -0.3 },
   pickMeta: { color: "rgba(255,255,255,0.8)", fontSize: tType.sm, marginTop: 4 },
   pickReason: { color: "#FFF", fontSize: tType.base, marginTop: 8, lineHeight: 20 },
 });

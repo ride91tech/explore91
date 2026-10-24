@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, TextInput } from "react-native";
 import { Image } from "expo-image";
 import { api } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import { PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty, Card, Loading } from "@/src/components/admin/ui";
 import { useAsyncAction } from "@/src/components/admin/feedback";
 
@@ -154,13 +154,13 @@ export default function CitiesAdmin() {
 }
 
 const styles = StyleSheet.create({
-  section: { fontSize: 16, fontWeight: "700", color: colors.onSurface },
+  section: { fontSize: 16, fontFamily: fonts.bodyBold, color: colors.onSurface },
   hint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 4 },
   form: { flexDirection: "row", gap: 12, marginTop: 16 },
   input: { height: 40, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 12, color: colors.onSurface, fontSize: tType.base },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   thumb: { width: 60, height: 40, borderRadius: 6, backgroundColor: colors.surfaceTertiary },
-  cityName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  cityName: { fontSize: tType.base, fontFamily: fonts.display, color: colors.onSurface },
   slug: { fontFamily: "monospace", fontSize: tType.sm, color: colors.onSurface },
   missing: { fontSize: tType.sm, color: colors.warning, fontStyle: "italic" },
   counts: { fontSize: tType.sm, color: colors.onSurfaceSecondary },

@@ -12,7 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { api, Business } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 import type { IconName } from "@/src/icons";
 
 type Dashboard = {
@@ -263,12 +263,12 @@ function QuickAction({
 const styles = StyleSheet.create({
   eyebrow: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.bodyBold,
     color: colors.onSurfaceTertiary,
     letterSpacing: 2,
     textTransform: "uppercase",
   },
-  h1: { fontSize: 32, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.8, marginTop: 4 },
+  h1: { fontSize: 32, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.8, marginTop: 4 },
   h1Sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 4 },
 
   heroRow: { flexDirection: "row", gap: spacing.lg, flexWrap: "wrap" as any },
@@ -283,11 +283,11 @@ const styles = StyleSheet.create({
   revenueLabel: {
     color: "rgba(255,255,255,0.7)",
     fontSize: tType.sm,
-    fontWeight: "700",
+    fontFamily: fonts.bodyBold,
     letterSpacing: 1,
     textTransform: "uppercase",
   },
-  revenueValue: { color: "#FFF", fontSize: 40, fontWeight: "800", letterSpacing: -1, marginTop: spacing.md },
+  revenueValue: { color: "#FFF", fontSize: 40, fontFamily: fonts.display, letterSpacing: -1, marginTop: spacing.md },
   revenueHint: { color: "rgba(255,255,255,0.6)", fontSize: tType.sm, marginTop: spacing.sm },
 
   kpiGrid: {
@@ -314,13 +314,13 @@ const styles = StyleSheet.create({
   },
   kpiLabel: {
     fontSize: 11,
-    fontWeight: "700",
+    fontFamily: fonts.bodyBold,
     color: colors.onSurfaceTertiary,
     letterSpacing: 1,
     textTransform: "uppercase",
     marginTop: spacing.md,
   },
-  kpiValue: { fontSize: 26, fontWeight: "800", color: colors.onSurface, marginTop: 4, letterSpacing: -0.6 },
+  kpiValue: { fontSize: 26, fontFamily: fonts.display, color: colors.onSurface, marginTop: 4, letterSpacing: -0.6 },
 
   quickRow: {
     flexDirection: "row",
@@ -347,12 +347,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  qaTitle: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  qaTitle: { fontSize: tType.base, fontFamily: fonts.display, color: colors.onSurface },
   qaHint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
 
   sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  section: { fontSize: tType.xl, fontWeight: "700", color: colors.onSurface, letterSpacing: -0.3 },
-  sectionLink: { fontSize: tType.sm, color: colors.brandPrimary, fontWeight: "700" },
+  section: { fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.3 },
+  sectionLink: { fontSize: tType.sm, color: colors.brandPrimary, fontFamily: fonts.bodyBold },
 
   bizRow: {
     flexDirection: "row",
@@ -365,13 +365,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   bizImg: { width: 64, height: 64, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
-  bizName: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  bizName: { fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface },
   bizMeta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   pillRow: { flexDirection: "row", gap: 6, marginTop: 6 },
   pill: { paddingHorizontal: 8, height: 22, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
   pillOk: { backgroundColor: colors.success },
   pillPending: { backgroundColor: colors.warning },
-  pillText: { fontSize: 11, fontWeight: "700", color: "#FFF", textTransform: "capitalize" },
+  pillText: { fontSize: 11, fontFamily: fonts.bodyBold, color: "#FFF", textTransform: "capitalize" },
 
   emptyCard: {
     padding: spacing.xl,
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-  emptyTitle: { fontSize: tType.xl, fontWeight: "800", color: colors.onSurface, marginTop: 6 },
+  emptyTitle: { fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface, marginTop: 6 },
   emptySub: { fontSize: tType.base, color: colors.onSurfaceTertiary, textAlign: "center" },
   emptyCta: {
     marginTop: spacing.md,
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  emptyCtaText: { color: "#FFF", fontWeight: "700", fontSize: tType.base },
+  emptyCtaText: { color: "#FFF", fontFamily: fonts.bodyBold, fontSize: tType.base },
   emptyInline: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: spacing.md },
 
   bookingRow: {
@@ -413,6 +413,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.success,
   },
-  bookingName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  bookingName: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
   bookingMeta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
 });

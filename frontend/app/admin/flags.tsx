@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { apiPaged, api } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import {
   PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty, Card,
   Pagination, ResultCount, Loading,
@@ -210,10 +210,10 @@ const styles = StyleSheet.create({
   filters: { flexDirection: "row", gap: 6, backgroundColor: colors.surface, padding: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.border },
   chip: { paddingHorizontal: 14, height: 30, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   chipActive: { backgroundColor: colors.brandPrimary },
-  chipText: { fontSize: 12, fontWeight: "700", color: colors.onSurface },
+  chipText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.onSurface },
   chipTextActive: { color: "#FFF" },
 
-  section: { fontSize: 16, fontWeight: "700", color: colors.onSurface },
+  section: { fontSize: 16, fontFamily: fonts.bodyBold, color: colors.onSurface },
   hint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 4 },
   form: { marginTop: 16, gap: 12 },
   typeRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },

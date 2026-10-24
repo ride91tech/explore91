@@ -24,7 +24,7 @@ import { reelCta, mapsUrl } from "@/src/reelCta";
 import { placeUrl, shareContent } from "@/src/links";
 import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/components/Toast";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 const TAB_BAR = 82;
 
@@ -495,12 +495,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   topicChipActive: { backgroundColor: "#FFF", borderColor: "#FFF" },
-  topicText: { color: "#FFF", fontSize: tType.sm, fontWeight: "700" },
+  topicText: { color: "#FFF", fontSize: tType.sm, fontFamily: fonts.bodyBold },
   topicTextActive: { color: colors.onSurface },
 
   container: { flex: 1, backgroundColor: "#000" },
   loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000", gap: spacing.md },
-  emptyTitle: { color: "#FFF", fontSize: 18, fontWeight: "700", textAlign: "center" },
+  emptyTitle: { color: "#FFF", fontSize: 18, fontFamily: fonts.display, textAlign: "center" },
   emptySub: { color: "rgba(255,255,255,0.7)", fontSize: tType.base, textAlign: "center" },
   topBar: {
     position: "absolute",
@@ -510,11 +510,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  brand: { color: "#FFF", fontSize: 22, fontWeight: "800", letterSpacing: -0.4, textShadowColor: "rgba(0,0,0,0.6)", textShadowRadius: 8 },
+  brand: { color: "#FFF", fontSize: 22, fontFamily: fonts.display, letterSpacing: -0.4, textShadowColor: "rgba(0,0,0,0.6)", textShadowRadius: 8 },
   cityBadge: {
     color: "#FFF",
     fontSize: 12,
-    fontWeight: "700",
+    fontFamily: fonts.bodyBold,
     paddingHorizontal: 10,
     height: 26,
     lineHeight: 26,
@@ -543,7 +543,7 @@ const reelStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
   },
-  mutePillText: { color: "#FFF", fontSize: 11, fontWeight: "600" },
+  mutePillText: { color: "#FFF", fontSize: 11, fontFamily: fonts.bodySemi },
 
   rail: {
     position: "absolute",
@@ -557,7 +557,7 @@ const reelStyles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
     alignItems: "center", justifyContent: "center",
   },
-  actionLabel: { color: "#FFF", fontSize: 12, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.6)", textShadowRadius: 4 },
+  actionLabel: { color: "#FFF", fontSize: 12, fontFamily: fonts.bodyBold, textShadowColor: "rgba(0,0,0,0.6)", textShadowRadius: 4 },
 
   bottom: {
     position: "absolute",
@@ -568,7 +568,7 @@ const reelStyles = StyleSheet.create({
     alignItems: "flex-end",
     gap: spacing.md,
   },
-  author: { color: "#FFF", fontSize: 15, fontWeight: "700", marginBottom: 4 },
+  author: { color: "#FFF", fontSize: 15, fontFamily: fonts.bodyBold, marginBottom: 4 },
   caption: { color: "#FFF", fontSize: 15, lineHeight: 20, marginBottom: 10 },
   bizChip: {
     alignSelf: "flex-start",
@@ -583,7 +583,7 @@ const reelStyles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.3)",
     maxWidth: "100%",
   },
-  bizChipText: { color: "#FFF", fontSize: 12, fontWeight: "700", flexShrink: 1 },
+  bizChipText: { color: "#FFF", fontSize: 12, fontFamily: fonts.bodyBold, flexShrink: 1 },
 
   bookBtn: {
     position: "absolute",
@@ -596,5 +596,5 @@ const reelStyles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#FFF",
   },
-  bookText: { color: colors.onSurface, fontSize: 14, fontWeight: "800" },
+  bookText: { color: colors.onSurface, fontSize: 14, fontFamily: fonts.bodyBold },
 });

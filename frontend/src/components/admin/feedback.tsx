@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type ToastKind = "error" | "success" | "info";
 type ToastItem = { id: number; kind: ToastKind; text: string };
@@ -108,5 +108,5 @@ const styles = StyleSheet.create({
   error: { backgroundColor: colors.error },
   success: { backgroundColor: colors.success },
   info: { backgroundColor: colors.brandSecondary },
-  toastText: { color: "#FFF", fontSize: tType.sm, fontWeight: "600", flex: 1 },
+  toastText: { color: "#FFF", fontSize: tType.sm, fontFamily: fonts.bodySemi, flex: 1 },
 });

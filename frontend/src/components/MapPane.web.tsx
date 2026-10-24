@@ -3,7 +3,7 @@ import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Business } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type Props = {
   businesses: Business[];
@@ -57,6 +57,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   pin: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  title: { fontSize: tType.base, fontFamily: fonts.display, color: colors.onSurface },
   sub: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
 });

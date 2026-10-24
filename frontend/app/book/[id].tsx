@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { api, Business } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 const TIMES = ["12:30", "13:00", "13:30", "19:00", "19:30", "20:00", "20:30", "21:00"];
 
@@ -124,7 +124,7 @@ export default function BookScreen() {
             <Text style={styles.primaryBtnText}>View my bookings</Text>
           </Pressable>
           <Pressable onPress={() => router.replace("/(tabs)")} style={{ marginTop: spacing.md, alignSelf: "center" }}>
-            <Text style={{ color: colors.onSurfaceTertiary, fontWeight: "600" }}>Back to home</Text>
+            <Text style={{ color: colors.onSurfaceTertiary, fontFamily: fonts.bodySemi }}>Back to home</Text>
           </Pressable>
         </View>
       </View>
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   close: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  headerTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
 
   summary: {
     flexDirection: "row",
@@ -302,18 +302,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   summaryImg: { width: 56, height: 56, borderRadius: radius.md },
-  summaryName: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  summaryName: { fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface },
   summarySub: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
-  svcTag: { fontSize: tType.sm, color: colors.brandTertiary, marginTop: 2, fontWeight: "600" },
+  svcTag: { fontSize: tType.sm, color: colors.brandTertiary, marginTop: 2, fontFamily: fonts.bodySemi },
 
-  label: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface, marginBottom: spacing.sm },
+  label: { fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface, marginBottom: spacing.sm },
   dateCell: {
     width: 62, height: 78, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border,
     alignItems: "center", justifyContent: "center",
   },
   dateCellActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  dateDow: { fontSize: 11, color: colors.onSurfaceTertiary, fontWeight: "600", textTransform: "uppercase" },
-  dateNum: { fontSize: 22, color: colors.onSurface, fontWeight: "700", marginTop: 2 },
+  dateDow: { fontSize: 11, color: colors.onSurfaceTertiary, fontFamily: fonts.bodySemi, textTransform: "uppercase" },
+  dateNum: { fontSize: 22, color: colors.onSurface, fontFamily: fonts.display, marginTop: 2 },
   dateActiveText: { color: "#FFF" },
 
   timeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -322,14 +322,14 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   timeCellActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  timeText: { fontSize: tType.base, color: colors.onSurface, fontWeight: "600" },
+  timeText: { fontSize: tType.base, color: colors.onSurface, fontFamily: fonts.bodySemi },
 
   stepper: {
     flexDirection: "row", alignItems: "center", gap: spacing.xl,
     alignSelf: "flex-start", backgroundColor: colors.surfaceSecondary, padding: spacing.sm, borderRadius: radius.pill,
   },
   stepBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#FFF", alignItems: "center", justifyContent: "center" },
-  stepValue: { fontSize: 20, fontWeight: "700", color: colors.onSurface, minWidth: 24, textAlign: "center" },
+  stepValue: { fontSize: 20, fontFamily: fonts.display, color: colors.onSurface, minWidth: 24, textAlign: "center" },
 
   notesInput: {
     minHeight: 120,
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   recap: { marginTop: spacing.xl, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary, overflow: "hidden" },
   recapRow: { flexDirection: "row", alignItems: "center", height: 48, paddingHorizontal: spacing.md, gap: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
   recapLabel: { flex: 1, fontSize: tType.base, color: colors.onSurfaceTertiary },
-  recapValue: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  recapValue: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
 
   actionBar: {
     position: "absolute", left: 0, right: 0, bottom: 0,
@@ -354,23 +354,23 @@ const styles = StyleSheet.create({
     height: 54, borderRadius: radius.pill, backgroundColor: colors.brandPrimary,
     alignItems: "center", justifyContent: "center",
   },
-  primaryBtnText: { color: "#FFF", fontSize: tType.lg, fontWeight: "700" },
+  primaryBtnText: { color: "#FFF", fontSize: tType.lg, fontFamily: fonts.bodyBold },
   secondaryBtn: {
     height: 54, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary,
     alignItems: "center", justifyContent: "center",
   },
-  secondaryText: { color: colors.onSurface, fontSize: tType.lg, fontWeight: "700" },
+  secondaryText: { color: colors.onSurface, fontSize: tType.lg, fontFamily: fonts.bodyBold },
 
   successWrap: { flex: 1, alignItems: "center", padding: spacing.xl, justifyContent: "center" },
   successIcon: {
     width: 88, height: 88, borderRadius: 44, backgroundColor: colors.success,
     alignItems: "center", justifyContent: "center",
   },
-  successTitle: { fontSize: 26, fontWeight: "800", color: colors.onSurface, marginTop: spacing.xl, letterSpacing: -0.4 },
+  successTitle: { fontSize: 26, fontFamily: fonts.display, color: colors.onSurface, marginTop: spacing.xl, letterSpacing: -0.4 },
   successSub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: spacing.sm, textAlign: "center" },
   successCard: { flexDirection: "row", padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary, gap: spacing.md, marginTop: spacing.xl, alignItems: "center", alignSelf: "stretch" },
   successImg: { width: 64, height: 64, borderRadius: radius.md },
-  successBiz: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  successBiz: { fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface },
   successMeta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
-  successPoints: { fontSize: tType.sm, fontWeight: "700", color: colors.success, marginTop: 6 },
+  successPoints: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.success, marginTop: 6 },
 });

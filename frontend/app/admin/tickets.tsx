@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable } from "react-native";
 import { apiPaged, api } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import {
   PageHeader, Btn, Pill, Empty, Card,
   Pagination, ResultCount, Loading,
@@ -173,15 +173,15 @@ const styles = StyleSheet.create({
   filters: { flexDirection: "row", gap: 6, backgroundColor: colors.surface, padding: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.border },
   chip: { paddingHorizontal: 14, height: 30, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   chipActive: { backgroundColor: colors.brandPrimary },
-  chipText: { fontSize: 12, fontWeight: "700", color: colors.onSurface },
+  chipText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.onSurface },
   chipTextActive: { color: "#FFF" },
 
   head: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  subject: { fontSize: 16, fontWeight: "700", color: colors.onSurface },
+  subject: { fontSize: 16, fontFamily: fonts.bodyBold, color: colors.onSurface },
   meta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   body: { fontSize: tType.base, color: colors.onSurface, marginTop: 12, lineHeight: 22 },
   replyBlock: { marginTop: 12, padding: 12, backgroundColor: colors.surfaceSecondary, borderRadius: 8 },
-  replyLabel: { fontSize: 11, fontWeight: "700", color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1 },
+  replyLabel: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1 },
   replyText: { fontSize: tType.base, color: colors.onSurface, marginTop: 4, lineHeight: 22 },
   replyInput: { minHeight: 80, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, color: colors.onSurface, fontSize: tType.base, textAlignVertical: "top" },
 });

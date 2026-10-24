@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { api, loadToken } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import {
   PageHeader, Btn, KPI, Card, Table, TableHead, TableRow, Cell, Empty,
   SearchInput, Loading,
@@ -180,14 +180,14 @@ const styles = StyleSheet.create({
   filters: { flexDirection: "row", gap: 6, backgroundColor: colors.surface, padding: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.border },
   chip: { paddingHorizontal: 14, height: 30, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   chipActive: { backgroundColor: colors.brandPrimary },
-  chipText: { fontSize: 12, fontWeight: "700", color: colors.onSurface },
+  chipText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.onSurface },
   chipTextActive: { color: "#FFF" },
 
   kpiRow: { flexDirection: "row", gap: 16, flexWrap: "wrap" },
 
   chartHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.onSurface },
-  axisMax: { fontSize: 11, color: colors.onSurfaceTertiary, fontWeight: "600" },
+  sectionTitle: { fontSize: 16, fontFamily: fonts.display, color: colors.onSurface },
+  axisMax: { fontSize: 11, color: colors.onSurfaceTertiary, fontFamily: fonts.bodySemi },
   chart: { marginTop: 16, height: 200, flexDirection: "row", alignItems: "flex-end", gap: 3 },
   barCol: { flex: 1, alignItems: "center", gap: 4, minWidth: 6 },
   barTrack: { flex: 1, width: "100%", maxWidth: 18, borderRadius: 4, backgroundColor: colors.surfaceSecondary, justifyContent: "flex-end", overflow: "hidden" },
@@ -198,5 +198,5 @@ const styles = StyleSheet.create({
 
   legend: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 16 },
   swatch: { width: 10, height: 10, borderRadius: 2 },
-  legendText: { fontSize: 11, color: colors.onSurfaceTertiary, fontWeight: "600" },
+  legendText: { fontSize: 11, color: colors.onSurfaceTertiary, fontFamily: fonts.bodySemi },
 });

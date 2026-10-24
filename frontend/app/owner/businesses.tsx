@@ -10,7 +10,7 @@ import { Image } from "expo-image";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { api, Business } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 export default function OwnerBusinesses() {
   const router = useRouter();
@@ -109,8 +109,8 @@ export default function OwnerBusinesses() {
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.md, flexWrap: "wrap" as any },
-  eyebrow: { fontSize: 11, fontWeight: "800", color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
-  h1: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
+  eyebrow: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
+  h1: { fontSize: 28, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
 
   primaryBtn: {
     flexDirection: "row",
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.brandPrimary,
   },
-  primaryBtnText: { color: "#FFF", fontWeight: "700", fontSize: tType.sm },
+  primaryBtnText: { color: "#FFF", fontFamily: fonts.bodyBold, fontSize: tType.sm },
 
   row: {
     flexDirection: "row",
@@ -134,13 +134,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   img: { width: 72, height: 72, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
-  name: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  name: { fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface },
   meta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   pillRow: { flexDirection: "row", gap: 6, marginTop: 8, flexWrap: "wrap" as any },
   pill: { paddingHorizontal: 8, height: 22, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
   pillOk: { backgroundColor: colors.success },
   pillPending: { backgroundColor: colors.warning },
-  pillText: { fontSize: 11, fontWeight: "700", color: "#FFF" },
+  pillText: { fontSize: 11, fontFamily: fonts.bodyBold, color: "#FFF" },
   ratingPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceSecondary,
   },
-  ratingText: { fontSize: 11, fontWeight: "700", color: colors.onSurface },
+  ratingText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurface },
 
   empty: {
     padding: spacing.xl,
@@ -161,6 +161,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  emptyTitle: { fontSize: tType.xl, fontWeight: "800", color: colors.onSurface, marginTop: 6 },
+  emptyTitle: { fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface, marginTop: 6 },
   emptySub: { fontSize: tType.base, color: colors.onSurfaceTertiary, textAlign: "center" },
 });

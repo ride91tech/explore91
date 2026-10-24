@@ -3,7 +3,7 @@ import React from "react";
 import { View, StyleSheet, Text, Pressable } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { Business } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type Props = {
   businesses: Business[];
@@ -37,7 +37,7 @@ export function MapPane({ businesses, onSelect, city }: Props) {
             key={b.business_id}
             coordinate={{ latitude: b.lat, longitude: b.lng }}
             onPress={() => setSelected(b)}
-            pinColor="#1A1A1A"
+            pinColor={colors.brandPrimary}
           />
         ))}
       </MapView>
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-  title: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  title: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
   sub: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
-  cta: { marginTop: spacing.sm, color: colors.brandPrimary, fontWeight: "700", fontSize: tType.sm },
+  cta: { marginTop: spacing.sm, color: colors.brandPrimary, fontFamily: fonts.bodyBold, fontSize: tType.sm },
 });

@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 export function PageHeader({
   title,
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   },
   headerTitles: { flexGrow: 1, flexShrink: 1, minWidth: 220 },
   headerRight: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12 },
-  title: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
+  title: { fontSize: 28, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.5 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 4 },
 
   card: {
@@ -253,18 +253,18 @@ const styles = StyleSheet.create({
     borderColor: colors.divider,
     padding: spacing.lg,
   },
-  kpiLabel: { fontSize: 11, color: colors.onSurfaceTertiary, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1 },
-  kpiValue: { fontSize: 28, fontWeight: "800", color: colors.onSurface, marginTop: 6 },
+  kpiLabel: { fontSize: 11, color: colors.onSurfaceTertiary, fontFamily: fonts.bodyBold, textTransform: "uppercase", letterSpacing: 1 },
+  kpiValue: { fontSize: 28, fontFamily: fonts.display, color: colors.onSurface, marginTop: 6 },
   kpiHint: { fontSize: 11, color: colors.onSurfaceTertiary, marginTop: 4 },
 
   pill: { paddingHorizontal: 10, height: 22, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
-  pillText: { fontSize: 11, fontWeight: "700" },
+  pillText: { fontSize: 11, fontFamily: fonts.bodyBold },
 
   btn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     paddingHorizontal: 14, gap: 6, borderRadius: radius.pill,
   },
-  btnLabel: { fontWeight: "700" },
+  btnLabel: { fontFamily: fonts.bodyBold },
 
   table: {
     backgroundColor: colors.surface,
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.divider,
     gap: 12,
   },
-  th: { fontSize: 11, fontWeight: "700", color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1 },
+  th: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1 },
   tRow: {
     flexDirection: "row",
     paddingVertical: 12,
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 16,
   },
-  pagerText: { fontSize: tType.sm, color: colors.onSurfaceTertiary, fontWeight: "600" },
+  pagerText: { fontSize: tType.sm, color: colors.onSurfaceTertiary, fontFamily: fonts.bodySemi },
 
   loading: { flexDirection: "row", alignItems: "center", gap: 10, padding: 24 },
   loadingText: { fontSize: tType.base, color: colors.onSurfaceTertiary },

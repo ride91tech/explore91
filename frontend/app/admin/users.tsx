@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { apiPaged, api, UserT } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import {
   PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty,
   SearchInput, Pagination, ResultCount, Loading,
@@ -157,7 +157,7 @@ export default function Users() {
 const styles = StyleSheet.create({
   userCell: { flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  avatarText: { color: "#FFF", fontWeight: "700" },
-  userName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  avatarText: { color: "#FFF", fontFamily: fonts.bodyBold },
+  userName: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
   userEmail: { fontSize: tType.sm, color: colors.onSurfaceTertiary },
 });

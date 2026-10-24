@@ -14,7 +14,7 @@ import { Slot, useRouter } from "expo-router";
 import { useRouteSegments } from "@/src/routing";
 import { useAuth } from "@/src/auth";
 import { api } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 const NAV = [
   { key: "index", label: "Overview", icon: "grid-outline" as const, href: "/owner" },
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.brandPrimary,
   },
-  brand: { fontSize: 13, fontWeight: "800", color: colors.onSurface, letterSpacing: 2 },
+  brand: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.onSurface, letterSpacing: 2 },
   brandSub: { fontSize: 11, color: colors.onSurfaceTertiary, marginTop: 2 },
 
   navItem: {
@@ -269,8 +269,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   navItemActive: { backgroundColor: colors.surfaceSecondary },
-  navLabel: { fontSize: tType.base, color: colors.onSurfaceTertiary, fontWeight: "500" },
-  navLabelActive: { color: colors.onSurface, fontWeight: "700" },
+  navLabel: { fontSize: tType.base, color: colors.onSurfaceTertiary, fontFamily: fonts.bodyMedium },
+  navLabelActive: { color: colors.onSurface, fontFamily: fonts.bodyBold },
 
   userBox: {
     flexDirection: "row",
@@ -289,8 +289,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { color: "#FFF", fontWeight: "700" },
-  userName: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurface },
+  avatarText: { color: "#FFF", fontFamily: fonts.bodyBold },
+  userName: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.onSurface },
   userEmail: { fontSize: 11, color: colors.onSurfaceTertiary },
 
   content: { flex: 1 } as any,
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   },
   enableTitle: {
     fontSize: 22,
-    fontWeight: "800",
+    fontFamily: fonts.display,
     color: colors.onSurface,
     letterSpacing: -0.4,
     textAlign: "center",
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignSelf: "stretch",
   },
-  primaryBtnText: { color: "#FFF", fontSize: tType.base, fontWeight: "700" },
+  primaryBtnText: { color: "#FFF", fontSize: tType.base, fontFamily: fonts.bodyBold },
   secondaryLink: { color: colors.onSurfaceTertiary, fontSize: tType.sm, marginTop: 8 },
 
   mobileShell: { flex: 1, backgroundColor: colors.background } as any,
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  mobileTitle: { fontSize: tType.lg, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.3 },
+  mobileTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.3 },
 
   drawerBackdrop: {
     flex: 1,

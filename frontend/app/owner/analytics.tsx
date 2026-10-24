@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { api } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type Analytics = {
   by_day: { date: string; count: number }[];
@@ -109,8 +109,8 @@ export default function OwnerAnalytics() {
 }
 
 const styles = StyleSheet.create({
-  eyebrow: { fontSize: 11, fontWeight: "800", color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
-  h1: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
+  eyebrow: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
+  h1: { fontSize: 28, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 4 },
 
   headerCard: {
@@ -122,12 +122,12 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.bodyBold,
     color: colors.onSurfaceTertiary,
     letterSpacing: 1,
     textTransform: "uppercase",
   },
-  headerValue: { fontSize: 40, fontWeight: "800", color: colors.onSurface, marginTop: 8, letterSpacing: -1 },
+  headerValue: { fontSize: 40, fontFamily: fonts.display, color: colors.onSurface, marginTop: 8, letterSpacing: -1 },
 
   card: {
     padding: spacing.xl,
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.divider,
   },
-  section: { fontSize: tType.xl, fontWeight: "700", color: colors.onSurface },
+  section: { fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface },
   sectionHint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
 
   chartRow: {
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
   barLabel: { fontSize: 9, color: colors.onSurfaceTertiary },
 
   bizHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-  bizLabel: { fontSize: tType.sm, color: colors.onSurface, fontWeight: "600" },
+  bizLabel: { fontSize: tType.sm, color: colors.onSurface, fontFamily: fonts.bodySemi },
   hBarTrack: { height: 10, borderRadius: 5, backgroundColor: colors.surfaceSecondary, overflow: "hidden" },
   hBarFill: { height: 10, backgroundColor: colors.brandPrimary, borderRadius: 5 },
 

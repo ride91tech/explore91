@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiPaged, api, Business } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import {
   PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty,
   SearchInput, Pagination, ResultCount, Loading,
@@ -217,11 +217,11 @@ const styles = StyleSheet.create({
   filters: { flexDirection: "row", gap: 6, backgroundColor: colors.surface, padding: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.border },
   filterChip: { paddingHorizontal: 14, height: 30, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   filterChipActive: { backgroundColor: colors.brandPrimary },
-  filterText: { fontSize: 12, fontWeight: "700", color: colors.onSurface },
+  filterText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.onSurface },
   filterTextActive: { color: "#FFF" },
 
   bizCell: { flexDirection: "row", alignItems: "center", gap: 12 },
   bizImg: { width: 48, height: 48, borderRadius: 8, backgroundColor: colors.surfaceTertiary },
-  bizName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  bizName: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
   bizSub: { fontSize: tType.sm, color: colors.onSurfaceTertiary },
 });

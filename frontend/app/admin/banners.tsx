@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, TextInput } from "react-native";
 import { Image } from "expo-image";
 import { api } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import { PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty, Card, Loading } from "@/src/components/admin/ui";
 import { useAsyncAction } from "@/src/components/admin/feedback";
 
@@ -150,14 +150,14 @@ export default function BannersAdmin() {
 }
 
 const styles = StyleSheet.create({
-  section: { fontSize: 16, fontWeight: "700", color: colors.onSurface },
+  section: { fontSize: 16, fontFamily: fonts.bodyBold, color: colors.onSurface },
   hint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 4 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 16 },
   input: { minWidth: 240, flexGrow: 1, height: 40, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 12, color: colors.onSurface, fontSize: tType.base },
 
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   thumb: { width: 64, height: 40, borderRadius: 6, backgroundColor: colors.surfaceTertiary },
-  bTitle: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  bTitle: { fontSize: tType.base, fontFamily: fonts.display, color: colors.onSurface },
   bSub: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   slug: { fontFamily: "monospace", fontSize: tType.sm, color: colors.onSurface },
   err: { color: colors.error, marginTop: 12, fontSize: tType.sm },

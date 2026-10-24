@@ -10,7 +10,7 @@ import {
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { api, CategoryT } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 const CITIES = ["Goa", "Ahmedabad", "Pune"];
 const PRICES = ["$", "$$", "$$$", "$$$$"];
@@ -240,8 +240,8 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 }
 
 const styles = StyleSheet.create({
-  eyebrow: { fontSize: 11, fontWeight: "800", color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
-  h1: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
+  eyebrow: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
+  h1: { fontSize: 28, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 4 },
 
   card: {
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
 
   label: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.bodyBold,
     color: colors.onSurfaceTertiary,
     letterSpacing: 1,
     textTransform: "uppercase",
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  chipText: { fontSize: tType.sm, fontWeight: "600", color: colors.onSurface },
+  chipText: { fontSize: tType.sm, fontFamily: fonts.bodySemi, color: colors.onSurface },
   chipTextActive: { color: "#FFF" },
 
   btypeCard: {
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   },
   btypeRadioActive: { borderColor: colors.brandPrimary },
   btypeDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.brandPrimary },
-  btypeLabel: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  btypeLabel: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
   btypeHint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
 
   primaryBtn: {
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
   },
-  primaryBtnText: { color: "#FFF", fontSize: tType.base, fontWeight: "700" },
+  primaryBtnText: { color: "#FFF", fontSize: tType.base, fontFamily: fonts.bodyBold },
   secondaryBtn: {
     height: 52,
     borderRadius: radius.pill,
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
   },
-  secondaryBtnText: { color: colors.onSurface, fontSize: tType.base, fontWeight: "700" },
+  secondaryBtnText: { color: colors.onSurface, fontSize: tType.base, fontFamily: fonts.bodyBold },
 
   successWrap: { alignItems: "center", padding: spacing.xl, gap: spacing.md },
   successIcon: {
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  successTitle: { fontSize: 24, fontWeight: "800", color: colors.onSurface, marginTop: spacing.md, letterSpacing: -0.4, textAlign: "center" },
+  successTitle: { fontSize: 24, fontFamily: fonts.display, color: colors.onSurface, marginTop: spacing.md, letterSpacing: -0.4, textAlign: "center" },
   successSub: { fontSize: tType.base, color: colors.onSurfaceTertiary, textAlign: "center", maxWidth: 480 },
   successCtas: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg, flexWrap: "wrap" as any },
 });

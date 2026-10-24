@@ -14,7 +14,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth";
 import { api } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1685271552630-9bc169185566?crop=entropy&cs=srgb&fm=jpg&w=1600&q=85";
 
@@ -77,7 +77,7 @@ export function AdminSignIn() {
       <View style={styles.brandPane}>
         <Image source={{ uri: HERO }} style={StyleSheet.absoluteFill} contentFit="cover" />
         <LinearGradient
-          colors={["rgba(17,17,17,0.55)", "rgba(17,17,17,0.85)", "rgba(17,17,17,0.98)"]}
+          colors={["rgba(14,22,15,0.55)", "rgba(14,22,15,0.85)", "rgba(14,22,15,0.98)"]}
           locations={[0, 0.55, 1]}
           style={StyleSheet.absoluteFill}
         />
@@ -164,7 +164,7 @@ export function AdminSignIn() {
               </View>
               <Text style={styles.h1}>Almost there.</Text>
               <Text style={styles.sub}>
-                You're signed in as <Text style={{ fontWeight: "700" }}>{user.email}</Text>. Your account needs the{" "}
+                You're signed in as <Text style={{ fontFamily: fonts.bodyBold }}>{user.email}</Text>. Your account needs the{" "}
                 <Text style={styles.code}>admin</Text> role to access this console.
               </Text>
 
@@ -233,13 +233,13 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   } as any,
   brandTop: { flexDirection: "row", alignItems: "center", gap: 12 },
-  brandDot: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.brandTertiary },
-  brand: { color: "#FFF", fontSize: 14, letterSpacing: 3, fontWeight: "800" },
+  brandDot: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.brandPrimary },
+  brand: { color: "#FFF", fontSize: 14, letterSpacing: 3, fontFamily: fonts.display },
   brandSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 },
 
   brandBottom: {},
-  heroKicker: { color: colors.brandTertiary, fontSize: 12, letterSpacing: 2, fontWeight: "800", textTransform: "uppercase" },
-  heroTitle: { color: "#FFF", fontSize: 44, fontWeight: "800", lineHeight: 52, letterSpacing: -1, marginTop: 12 },
+  heroKicker: { color: colors.brandTertiary, fontSize: 12, letterSpacing: 2, fontFamily: fonts.bodyBold, textTransform: "uppercase" },
+  heroTitle: { color: "#FFF", fontSize: 44, fontFamily: fonts.display, lineHeight: 52, letterSpacing: -1, marginTop: 12 },
   bulletCol: { marginTop: 32, gap: 12 },
   bulletRow: { flexDirection: "row", gap: 12, alignItems: "center" },
   bulletDot: {
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     borderColor: colors.divider,
     backgroundColor: colors.surface,
   },
-  h1: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 },
+  h1: { fontSize: 28, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 8, lineHeight: 22 },
 
   input: {
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
-  ctaText: { color: colors.onSurface, fontSize: 16, fontWeight: "700" },
+  ctaText: { color: colors.onSurface, fontSize: 16, fontFamily: fonts.bodyBold },
 
   checkIcon: {
     width: 48, height: 48, borderRadius: 24,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     gap: 8,
   },
-  stepTitle: { fontSize: 11, fontWeight: "800", color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1 },
+  stepTitle: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1 },
   stepItem: { fontSize: tType.sm, color: colors.onSurface, lineHeight: 20 },
   code: { fontFamily: "monospace", fontSize: 12, color: colors.onSurface, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 4, borderRadius: 4 },
 
@@ -321,12 +321,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  primaryBtnText: { color: "#FFF", fontSize: tType.base, fontWeight: "700" },
+  primaryBtnText: { color: "#FFF", fontSize: tType.base, fontFamily: fonts.bodyBold },
   err: { color: colors.error, fontSize: tType.sm, marginTop: 12, lineHeight: 18 },
 
   divider: { height: 1, backgroundColor: colors.divider, marginTop: 24, marginBottom: 20 },
   helper: { fontSize: tType.sm, color: colors.onSurfaceTertiary, textAlign: "center", lineHeight: 20 },
-  link: { color: colors.brandPrimary, fontWeight: "700" },
+  link: { color: colors.brandPrimary, fontFamily: fonts.bodyBold },
   textLinkRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
 
   legal: { fontSize: 11, color: colors.onSurfaceTertiary, marginTop: 32 },

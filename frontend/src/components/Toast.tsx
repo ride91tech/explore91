@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useRef, useState } from 
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type ToastKind = "error" | "success";
 type ToastItem = { id: number; kind: ToastKind; text: string };
@@ -113,5 +113,5 @@ const styles = StyleSheet.create({
   },
   error: { backgroundColor: colors.error },
   success: { backgroundColor: colors.success },
-  text: { color: "#FFF", fontSize: tType.sm, fontWeight: "600", flex: 1, lineHeight: 19 },
+  text: { color: "#FFF", fontSize: tType.sm, fontFamily: fonts.bodySemi, flex: 1, lineHeight: 19 },
 });

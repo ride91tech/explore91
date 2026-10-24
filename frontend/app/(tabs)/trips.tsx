@@ -128,7 +128,7 @@ export default function Trips() {
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.surface }]}>
-        <ActivityIndicator color={colors.brandTertiary} />
+        <ActivityIndicator color={colors.brandPrimary} />
       </View>
     );
   }

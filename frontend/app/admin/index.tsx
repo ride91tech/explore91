@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { api } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import { PageHeader, KPI, Card, Btn, Loading } from "@/src/components/admin/ui";
 import { useAsyncAction } from "@/src/components/admin/feedback";
 
@@ -147,13 +147,13 @@ export default function Overview() {
 
 const styles = StyleSheet.create({
   kpiRow: { flexDirection: "row", gap: 16, flexWrap: "wrap" },
-  section: { fontSize: 16, fontWeight: "700", color: colors.onSurface },
+  section: { fontSize: 16, fontFamily: fonts.bodyBold, color: colors.onSurface },
   cityRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
-  cityName: { fontSize: tType.base, fontWeight: "600", color: colors.onSurface },
+  cityName: { fontSize: tType.base, fontFamily: fonts.displaySemi, color: colors.onSurface },
   cityCount: { fontSize: tType.sm, color: colors.onSurfaceTertiary },
   barTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceSecondary, overflow: "hidden" },
   barFill: { height: 8, backgroundColor: colors.brandPrimary, borderRadius: 4 },
 
-  noticeTitle: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  noticeTitle: { fontSize: tType.base, fontFamily: fonts.display, color: colors.onSurface },
   noticeBody: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 6, lineHeight: 20 },
 });

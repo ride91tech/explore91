@@ -22,7 +22,7 @@ import { api, Business, InterestStatus } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { useAuth } from "@/src/auth";
 import { placeUrl, shareContent } from "@/src/links";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type ReviewT = {
   review_id: string;
@@ -238,7 +238,7 @@ export default function BusinessDetail() {
             ))}
           </ScrollView>
           <LinearGradient
-            colors={["rgba(17,17,17,0.35)", "transparent"]}
+            colors={["rgba(14,22,15,0.35)", "transparent"]}
             style={{ position: "absolute", top: 0, left: 0, right: 0, height: 120 }}
           />
           {/* Header buttons */}
@@ -314,7 +314,15 @@ export default function BusinessDetail() {
                     testID={`interest-${s}`}
                     disabled={savingInterest}
                     onPress={() => flag(s)}
-                    style={[styles.journeyBtn, active && styles.journeyBtnActive]}
+                    style={[
+                      styles.journeyBtn,
+                      active && styles.journeyBtnActive,
+                      // The prototype's stylesheet is explicit: Journey Gold is
+                      // "reserved for /journey and Visited moments only". Using
+                      // it for all three states would spend the one colour that
+                      // is supposed to mean something.
+                      active && s === "visited" && styles.journeyBtnVisited,
+                    ]}
                   >
                     <Ionicons
                       name={
@@ -528,7 +536,7 @@ export default function BusinessDetail() {
 }
 
 const styles = StyleSheet.create({
-  gone: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface, textAlign: "center" },
+  gone: { fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface, textAlign: "center" },
   goneSub: { fontSize: tType.base, color: colors.onSurfaceSecondary, textAlign: "center" },
   goneBtn: {
     paddingHorizontal: spacing.lg,
@@ -538,20 +546,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  goneBtnPrimary: { backgroundColor: colors.brandTertiary },
-  goneBtnText: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  goneBtnPrimary: { backgroundColor: colors.brandPrimary },
+  goneBtnText: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
   goneBtnTextPrimary: { color: "#FFF" },
 
   areaKicker: {
     fontSize: 10,
-    fontWeight: "700",
+    fontFamily: fonts.bodyBold,
     letterSpacing: 1.2,
     color: colors.onSurfaceTertiary,
     marginBottom: 4,
   },
   sectionKicker: {
     fontSize: 10,
-    fontWeight: "700",
+    fontFamily: fonts.bodyBold,
     letterSpacing: 1.2,
     color: colors.onSurfaceTertiary,
     marginBottom: 6,
@@ -567,11 +575,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceSecondary,
   },
-  journeyBtnActive: { backgroundColor: colors.brandTertiary },
-  journeyBtnText: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurfaceSecondary },
+  journeyBtnActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  journeyBtnVisited: { backgroundColor: colors.brandTertiary, borderColor: colors.brandTertiary },
+  journeyBtnText: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.onSurfaceSecondary },
   journeyBtnTextActive: { color: "#FFF" },
   journeyNote: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 8 },
-  nearbyHead: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  nearbyHead: { fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface },
   nearbyRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -582,11 +591,11 @@ const styles = StyleSheet.create({
   },
   nearbyCat: {
     fontSize: 9,
-    fontWeight: "700",
+    fontFamily: fonts.bodyBold,
     letterSpacing: 1,
     color: colors.onSurfaceTertiary,
   },
-  nearbyName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface, marginTop: 2 },
+  nearbyName: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface, marginTop: 2 },
   nearbyMeta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 1 },
 
   loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
@@ -601,7 +610,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(17,17,17,0.55)",
+    backgroundColor: "rgba(14,22,15,0.55)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -625,11 +634,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  tagText: { fontSize: 11, color: colors.onSurfaceSecondary, fontWeight: "600" },
+  tagText: { fontSize: 11, color: colors.onSurfaceSecondary, fontFamily: fonts.bodySemi },
 
-  title: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 },
+  title: { fontSize: 28, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6 },
   metaRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
-  metaBold: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface, marginLeft: 3 },
+  metaBold: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface, marginLeft: 3 },
   metaLight: { fontSize: tType.base, color: colors.onSurfaceTertiary },
   dot2: { color: colors.onSurfaceTertiary, marginHorizontal: 6 },
 
@@ -638,9 +647,9 @@ const styles = StyleSheet.create({
 
   desc: { fontSize: tType.base, lineHeight: 22, color: colors.onSurfaceSecondary, marginTop: spacing.lg },
 
-  section: { fontSize: tType.xl, fontWeight: "700", color: colors.onSurface, letterSpacing: -0.3, marginBottom: spacing.sm },
+  section: { fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.3, marginBottom: spacing.sm },
   offerRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
-  offerText: { fontSize: tType.base, color: colors.onSurface, fontWeight: "500" },
+  offerText: { fontSize: tType.base, color: colors.onSurface, fontFamily: fonts.bodyMedium },
 
   menuRow: {
     flexDirection: "row",
@@ -650,7 +659,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
   },
-  menuName: { fontSize: tType.lg, fontWeight: "600", color: colors.onSurface },
+  menuName: { fontSize: tType.lg, fontFamily: fonts.bodySemi, color: colors.onSurface },
   menuPrice: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   menuImg: { width: 56, height: 56, borderRadius: radius.md },
 
@@ -670,16 +679,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  svcBtnText: { color: "#FFF", fontWeight: "700", fontSize: tType.sm },
+  svcBtnText: { color: "#FFF", fontFamily: fonts.bodyBold, fontSize: tType.sm },
 
-  reviewCount: { fontSize: tType.sm, color: colors.onSurfaceTertiary, fontWeight: "600" },
+  reviewCount: { fontSize: tType.sm, color: colors.onSurfaceTertiary, fontFamily: fonts.bodySemi },
   composer: {
     marginTop: spacing.md,
     padding: spacing.lg,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceSecondary,
   },
-  composerLabel: { fontSize: tType.sm, fontWeight: "600", color: colors.onSurfaceTertiary, marginBottom: 8 },
+  composerLabel: { fontSize: tType.sm, fontFamily: fonts.bodySemi, color: colors.onSurfaceTertiary, marginBottom: 8 },
   starRow: { flexDirection: "row", gap: 6 },
   reviewInput: {
     marginTop: spacing.md,
@@ -702,7 +711,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minWidth: 120,
   },
-  reviewSubmitText: { color: "#FFF", fontSize: tType.base, fontWeight: "700" },
+  reviewSubmitText: { color: "#FFF", fontSize: tType.base, fontFamily: fonts.bodyBold },
   emptyReview: { marginTop: spacing.md, color: colors.onSurfaceTertiary, fontSize: tType.base },
   reviewCard: {
     padding: spacing.md,
@@ -717,8 +726,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandPrimary,
     alignItems: "center", justifyContent: "center",
   },
-  reviewAvatarText: { color: "#FFF", fontWeight: "700", fontSize: tType.sm },
-  reviewName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  reviewAvatarText: { color: "#FFF", fontFamily: fonts.bodyBold, fontSize: tType.sm },
+  reviewName: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
   reviewDate: { fontSize: 11, color: colors.onSurfaceTertiary },
   reviewText: { fontSize: tType.base, color: colors.onSurfaceSecondary, marginTop: spacing.sm, lineHeight: 20 },
 
@@ -736,7 +745,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.divider,
   },
-  bookPrice: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  bookPrice: { fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface },
   bookHint: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   bookBtn: {
     height: 52,
@@ -748,5 +757,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  bookBtnText: { color: "#FFF", fontSize: tType.lg, fontWeight: "700" },
+  bookBtnText: { color: "#FFF", fontSize: tType.lg, fontFamily: fonts.bodyBold },
 });

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { apiPaged, api, ReelT } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import {
   PageHeader, Btn, Pill, Table, TableHead, TableRow, Cell, Empty,
   SearchInput, Pagination, ResultCount, Loading,
@@ -189,11 +189,11 @@ const styles = StyleSheet.create({
   filters: { flexDirection: "row", gap: 6, backgroundColor: colors.surface, padding: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.border },
   chip: { paddingHorizontal: 14, height: 30, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   chipActive: { backgroundColor: colors.brandPrimary },
-  chipText: { fontSize: 12, fontWeight: "700", color: colors.onSurface },
+  chipText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.onSurface },
   chipTextActive: { color: "#FFF" },
 
   reelCell: { flexDirection: "row", alignItems: "center", gap: 12 },
   thumb: { width: 44, height: 60, borderRadius: 6, backgroundColor: colors.surfaceTertiary },
-  caption: { fontSize: tType.sm, fontWeight: "600", color: colors.onSurface, lineHeight: 18 },
+  caption: { fontSize: tType.sm, fontFamily: fonts.bodySemi, color: colors.onSurface, lineHeight: 18 },
   meta: { fontSize: 11, color: colors.onSurfaceTertiary, marginTop: 2, lineHeight: 15 },
 });

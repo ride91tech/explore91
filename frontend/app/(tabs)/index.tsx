@@ -289,18 +289,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  emptyCityTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface, textAlign: "center" },
+  emptyCityTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface, textAlign: "center" },
   emptyCitySub: { fontSize: tType.base, color: colors.onSurfaceSecondary, textAlign: "center" },
   emptyCityBtn: {
     marginTop: spacing.sm,
     paddingHorizontal: spacing.lg,
     height: 44,
     borderRadius: radius.pill,
-    backgroundColor: colors.brandTertiary,
+    backgroundColor: colors.brandPrimary,
     alignItems: "center",
     justifyContent: "center",
   },
-  emptyCityBtnText: { color: "#FFF", fontWeight: "700", fontSize: tType.base },
+  emptyCityBtnText: { color: "#FFF", fontFamily: fonts.bodyBold, fontSize: tType.base },
   container: { flex: 1, backgroundColor: colors.background },
   // Just over half the viewport, as on the site. Tall enough for the city
   // name to dominate, short enough that the sheet below is clearly content

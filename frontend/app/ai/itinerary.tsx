@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/src/auth";
 import { api, Business } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type Stop = { time: string; note: string; business?: Business };
 type DayT = { day: number; theme: string; stops: Stop[] };
@@ -175,30 +175,30 @@ export default function ItineraryScreen() {
 const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingBottom: spacing.md, justifyContent: "space-between" },
   close: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  headerTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
 
-  h1: { fontSize: 26, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 },
+  h1: { fontSize: 26, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: spacing.sm, lineHeight: 22 },
-  sectionLabel: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1, marginTop: spacing.xl, marginBottom: spacing.sm },
+  sectionLabel: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1, marginTop: spacing.xl, marginBottom: spacing.sm },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { paddingHorizontal: 14, height: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  chipText: { fontSize: tType.base, fontWeight: "600", color: colors.onSurface },
+  chipText: { fontSize: tType.base, fontFamily: fonts.bodySemi, color: colors.onSurface },
   chipTextActive: { color: "#FFF" },
 
   cta: { marginTop: spacing.xxl, height: 54, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
-  ctaText: { color: "#FFF", fontSize: tType.lg, fontWeight: "700" },
+  ctaText: { color: "#FFF", fontSize: tType.lg, fontFamily: fonts.bodyBold },
   pickHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.md },
-  reset: { color: colors.brandPrimary, fontWeight: "700", fontSize: tType.base },
+  reset: { color: colors.brandPrimary, fontFamily: fonts.bodyBold, fontSize: tType.base },
 
   dayBadge: { flexDirection: "row", alignItems: "baseline", gap: 10, marginBottom: spacing.md },
-  dayText: { fontSize: tType.xl, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.4 },
+  dayText: { fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.4 },
   dayTheme: { fontSize: tType.base, color: colors.onSurfaceTertiary },
 
   timeline: { paddingLeft: 4 },
   stopRow: { flexDirection: "row", gap: spacing.md },
   timeCol: { width: 62, alignItems: "flex-start", paddingTop: 14 },
-  timeText: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurface, position: "absolute", top: 4 },
+  timeText: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.onSurface, position: "absolute", top: 4 },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.brandPrimary, marginTop: 22 },
   line: { width: 2, flex: 1, backgroundColor: colors.divider, marginLeft: 4, marginTop: 4 },
   stopCard: {
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     minHeight: 78,
   },
   stopImg: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
-  stopName: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  stopName: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
   stopMeta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   stopNote: { fontSize: tType.sm, color: colors.onSurfaceSecondary, marginTop: 4, lineHeight: 18 },
 });

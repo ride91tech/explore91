@@ -10,7 +10,7 @@ import { Image } from "expo-image";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useFocusEffect } from "expo-router";
 import { api } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 type OwnerBooking = {
   booking_id: string;
@@ -149,8 +149,8 @@ function formatDay(iso: string) {
 }
 
 const styles = StyleSheet.create({
-  eyebrow: { fontSize: 11, fontWeight: "800", color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
-  h1: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
+  eyebrow: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, letterSpacing: 2, textTransform: "uppercase" },
+  h1: { fontSize: 28, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6, marginTop: 4 },
   sub: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 4 },
 
   filterRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" as any },
@@ -165,11 +165,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   filterActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  filterText: { fontSize: tType.sm, color: colors.onSurface, fontWeight: "600" },
+  filterText: { fontSize: tType.sm, color: colors.onSurface, fontFamily: fonts.bodySemi },
   filterTextActive: { color: "#FFF" },
-  filterCount: { color: colors.onSurfaceTertiary, fontWeight: "500" },
+  filterCount: { color: colors.onSurfaceTertiary, fontFamily: fonts.bodyMedium },
 
-  dayLabel: { fontSize: 11, fontWeight: "800", color: colors.onSurfaceTertiary, letterSpacing: 1, textTransform: "uppercase" },
+  dayLabel: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, letterSpacing: 1, textTransform: "uppercase" },
 
   row: {
     flexDirection: "row",
@@ -182,12 +182,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   img: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
-  name: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  name: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
   meta: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   notes: { fontSize: tType.sm, color: colors.onSurfaceSecondary, marginTop: 6, fontStyle: "italic" },
 
   badge: { paddingHorizontal: 10, height: 24, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
-  badgeText: { color: "#FFF", fontSize: 11, fontWeight: "700", textTransform: "capitalize" },
+  badgeText: { color: "#FFF", fontSize: 11, fontFamily: fonts.bodyBold, textTransform: "capitalize" },
 
   empty: {
     padding: spacing.xl,
@@ -198,6 +198,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  emptyTitle: { fontSize: tType.xl, fontWeight: "800", color: colors.onSurface, marginTop: 6 },
+  emptyTitle: { fontSize: tType.xl, fontFamily: fonts.display, color: colors.onSurface, marginTop: 6 },
   emptySub: { fontSize: tType.base, color: colors.onSurfaceTertiary, textAlign: "center" },
 });

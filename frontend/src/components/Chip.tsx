@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, Text, StyleSheet, View } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import * as Haptics from "expo-haptics";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 import type { IconName } from "@/src/icons";
 
 type Props = {
@@ -40,7 +40,7 @@ export function Chip({ label, icon, active, onPress, testID }: Props) {
 
 const styles = StyleSheet.create({
   chip: {
-    height: 36,
+    height: 38,
     flexShrink: 0,
     paddingHorizontal: 14,
     borderRadius: radius.pill,
@@ -56,9 +56,9 @@ const styles = StyleSheet.create({
     borderColor: colors.brandPrimary,
   },
   label: {
-    fontSize: tType.base,
+    fontFamily: fonts.bodySemi,
+    fontSize: tType.sm,
     color: colors.onSurface,
-    fontWeight: "600",
   },
   labelActive: {
     color: colors.onBrandPrimary,

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { apiPaged } from "@/src/api";
-import { colors, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, spacing, type as tType } from "@/src/theme";
 import {
   PageHeader, Pill, Table, TableHead, TableRow, Cell, Empty,
   SearchInput, Pagination, ResultCount, Loading,
@@ -161,11 +161,11 @@ export default function AuditLog() {
 }
 
 const styles = StyleSheet.create({
-  when: { fontSize: tType.sm, color: colors.onSurface, fontWeight: "600", lineHeight: 18 },
-  time: { fontSize: 11, color: colors.onSurfaceTertiary, fontWeight: "400" },
-  actor: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurface },
+  when: { fontSize: tType.sm, color: colors.onSurface, fontFamily: fonts.bodySemi, lineHeight: 18 },
+  time: { fontSize: 11, color: colors.onSurfaceTertiary, fontFamily: fonts.body },
+  actor: { fontSize: tType.sm, fontFamily: fonts.bodyBold, color: colors.onSurface },
   actorEmail: { fontSize: 11, color: colors.onSurfaceTertiary, marginTop: 2 },
-  entityType: { fontSize: 11, color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700" },
+  entityType: { fontSize: 11, color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1, fontFamily: fonts.bodyBold },
   mono: { fontFamily: "monospace", fontSize: 11, color: colors.onSurface, marginTop: 2 },
   change: { fontSize: tType.sm, color: colors.onSurface, lineHeight: 18 },
   note: { fontSize: 11, color: colors.onSurfaceTertiary, marginTop: 4, fontStyle: "italic" },
@@ -176,6 +176,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
-  detailLabel: { fontSize: 11, fontWeight: "700", color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1, marginTop: 12 },
+  detailLabel: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 1, marginTop: 12 },
   detailBody: { fontSize: tType.sm, color: colors.onSurface, marginTop: 4, fontFamily: "monospace", lineHeight: 18 },
 });

@@ -12,7 +12,8 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
 import { api, CityT, JourneyT } from "@/src/api";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, fonts, radius, shadow, spacing, text as tText, type as tType } from "@/src/theme";
 
 /**
  * Your Journey — the private record explore91.com leads with.
@@ -70,7 +71,7 @@ export default function Journey() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.brandTertiary} />
+          <ActivityIndicator color={colors.brandPrimary} />
         </View>
       ) : error ? (
         <View style={styles.center}>
@@ -97,7 +98,18 @@ export default function Journey() {
             </Text>
           </View>
 
-          <View style={styles.progressCard}>
+          {/* The gradient surface the Journey card on Trips and Profile
+              promises — tapping through to a flat grey panel made the two
+              feel like different features. */}
+          <LinearGradient
+            colors={[colors.brandPrimary, colors.brandSecondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.progressCard}
+          >
+            <View pointerEvents="none" style={styles.watermark}>
+              <Ionicons name="map" size={140} color="rgba(255,255,255,0.10)" />
+            </View>
             <Text style={styles.percent}>{journey?.india_percent ?? 0}%</Text>
             <Text style={styles.percentLabel}>of India</Text>
             <View style={styles.track}>
@@ -115,7 +127,7 @@ export default function Journey() {
                 outside the 28 states.
               </Text>
             ) : null}
-          </View>
+          </LinearGradient>
 
           {visited.length === 0 ? (
             <View style={styles.emptyBlock}>
@@ -178,67 +190,72 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  headerTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
 
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, padding: spacing.xl },
 
-  city: { fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 },
+  city: { fontSize: 30, fontFamily: fonts.display, color: colors.onSurface, letterSpacing: -0.6 },
   counts: { fontSize: tType.base, color: colors.onSurfaceSecondary, marginTop: 4 },
 
   progressCard: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.xxxl,
     padding: spacing.lg,
     gap: 6,
+    overflow: "hidden",
+    ...shadow.card,
   },
-  percent: { fontSize: 44, fontWeight: "800", color: colors.onSurface, letterSpacing: -1.5 },
-  percentLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    color: colors.onSurfaceTertiary,
+  watermark: { position: "absolute", right: -22, bottom: -30 },
+  percent: {
+    ...tText.displayTight,
+    fontSize: 46,
+    color: "#FFF",
   },
+  percentLabel: { ...tText.eyebrow, color: "rgba(255,255,255,0.8)" },
   track: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.surfaceTertiary,
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.18)",
     overflow: "hidden",
     marginTop: spacing.sm,
   },
-  fill: { height: 6, borderRadius: 3, backgroundColor: colors.brandTertiary },
-  utNote: { fontSize: tType.sm, color: colors.onSurfaceSecondary, marginTop: spacing.sm, lineHeight: 19 },
+  fill: { height: 8, borderRadius: radius.pill, backgroundColor: colors.brandTertiary },
+  utNote: {
+    fontFamily: fonts.body,
+    fontSize: tType.sm,
+    color: "rgba(255,255,255,0.85)",
+    marginTop: spacing.sm,
+    lineHeight: 19,
+  },
 
   emptyBlock: { gap: spacing.sm, alignItems: "flex-start" },
-  emptyHead: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
+  emptyHead: { fontSize: 22, fontFamily: fonts.display, color: colors.onSurface },
   emptySub: { fontSize: tType.base, color: colors.onSurfaceSecondary, lineHeight: 22 },
-  emptyTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface, textAlign: "center" },
+  emptyTitle: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface, textAlign: "center" },
 
   cta: {
     marginTop: spacing.sm,
     paddingHorizontal: spacing.lg,
     height: 46,
     borderRadius: radius.pill,
-    backgroundColor: colors.brandTertiary,
+    backgroundColor: colors.brandPrimary,
     alignItems: "center",
     justifyContent: "center",
   },
-  ctaText: { color: "#FFF", fontWeight: "700", fontSize: tType.base },
+  ctaText: { color: colors.onBrandPrimary, fontFamily: fonts.bodySemi, fontSize: tType.base },
 
-  sectionHead: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    color: colors.onSurfaceTertiary,
-  },
+  sectionHead: tText.eyebrow,
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.card,
   },
-  rowCity: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
+  rowCity: { fontFamily: fonts.displaySemi, fontSize: tType.base, color: colors.onSurface },
   rowState: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
   rowDate: { fontSize: tType.sm, color: colors.onSurfaceSecondary },
 
