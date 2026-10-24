@@ -4,7 +4,10 @@
 **Baseline:** `docs/EXPLORE91_AUDIT.md`, accepted as the planning baseline.
 **Product:** Indian place discovery through creator content, with collaborative
 outings and group trip planning.
-**Status:** proposed. Nothing here is built. No code changed, nothing deployed.
+**Status:** in progress. Phase 0 is closed except for staging and
+`ALLOWED_ORIGINS`; Phase 1 shipped in full; the app's interface was rebuilt
+against explore91.com. **Last reconciled against production: 2026-10-24** —
+see §8c for what changed and §10 for what happens next.
 
 ---
 
@@ -33,11 +36,19 @@ Four consequences follow, and they shape everything below:
 
 ---
 
-## 2. The public web surface — decision needed, both options sized
+## 2. The public web surface — ~~decision needed~~ **SETTLED: Option A, built**
+
+> **Resolved 2026-10-22.** Option A was chosen and shipped: Jinja2 templates on
+> a root-mounted router inside the existing FastAPI service. No second runtime
+> was added. The sizing below is kept because the reasoning still governs the
+> replacement path — Option A can become Option B later without changing URLs,
+> and the URLs are now live and shareable, so that property has gone from
+> theoretical to load-bearing.
 
 Priority 2 requires public, search-indexable place pages with WhatsApp
-previews. **No public web surface exists today.** The only web build is the
-admin console, which is unindexed by design and currently undeployed.
+previews. *(At the time of writing:)* **No public web surface exists today.**
+The only web build is the admin console, which is unindexed by design and
+currently undeployed.
 
 Priority 10 says keep Expo/FastAPI/MongoDB unless a change is justified. That
 rules the options as follows:
@@ -90,20 +101,25 @@ for what that assumes and where it is least reliable.
 
 **Depends on:** nothing. **Effort: 2–3 weeks.**
 
-| # | Work | Acceptance criteria |
-|---|---|---|
-| 0.1 | Google OAuth clients (Web, Android release + debug, iOS); set `GOOGLE_CLIENT_IDS` | A signed-out user completes Google Sign-In on a release APK against staging, then production, and reaches home |
-| 0.2 | **Staging environment**: second Cloud Run service + separate Atlas database | Staging runs the same image as the next production deploy, against data that is not production's |
-| 0.3 | Deploy the auth replacement behind the gates in §8 | `/auth/session` → 404, `/auth/google` → 200 for a valid token and 401 for junk; sessions issued before the deploy still work |
-| 0.4 | Rate limiting → shared store, keyed on trusted identity | Limits hold across instances under concurrent load; a client rotating `X-Forwarded-For` is still limited |
-| 0.5 | Set `ALLOWED_ORIGINS`; hash session tokens at rest | A foreign `Origin` is rejected; a dump of `user_sessions` yields no usable token |
-| 0.6 | Indexes on `place_interest` and `reviews`; drop 9 unused backend deps | `explain()` shows index scans, not `COLLSCAN`; image size drops; suite still green |
-| 0.7 | CI running the test suite on every push | A PR with a failing test cannot merge green |
-| 0.8 | Decide the AI concierge: key it or remove the entry point | No user-facing button returns 502 |
-| 0.9 | ~~**Fix test isolation**~~ **DONE** | The suite passes repeatedly in the mode pytest.ini configures. Done 2026-10-17 on `phase-0.9-test-isolation`: id handoffs replaced with per-test fixtures, the blanket row sweep removed, and the Motor client resolved per event loop. Suite now passes repeatedly in both modes with nothing excluded; the CI deselects are gone |
+| # | Work | Status | Acceptance criteria |
+|---|---|---|---|
+| 0.1 | ~~Google OAuth clients~~ → **OTP sign-in** | **SUPERSEDED — now the critical path, see §8d** | Google Sign-In was built, then removed entirely on 2026-10-23. `/auth/dev` stands in: it takes an email and issues a session, verifying nothing. Real sign-in is now OTP |
+| 0.2 | **Staging environment**: second Cloud Run service + separate Atlas database | **NOT DONE** | Staging runs the same image as the next production deploy, against data that is not production's |
+| 0.3 | Deploy the auth replacement behind the gates in §8 | **DONE 2026-10-22** | Deployed by canary at 0% → 100%. `/auth/session` → 404, `/auth/google` → 404. Sessions issued before the deploy still validate |
+| 0.4 | Rate limiting → shared store, keyed on trusted identity | **DONE** | MongoDB-backed fixed-window limiter; `TRUSTED_PROXY_HOPS` reads the last XFF entry, so a rotating prefix does not buy a fresh budget. Regression-tested |
+| 0.5 | Set `ALLOWED_ORIGINS`; hash session tokens at rest | **HALF DONE** | Session tokens are SHA-256 at rest and pre-hash rows upgrade atomically on first use. **`ALLOWED_ORIGINS` is still unset — CORS is open to any origin** |
+| 0.6 | Indexes on `place_interest` and `reviews`; drop 9 unused backend deps | **DONE** | Indexes build on boot; the runtime image is 27 packages instead of 74, and CI proves it installs the app on its own |
+| 0.7 | CI running the test suite on every push | **DONE** | Two jobs on every push; backend 247 passed / 6 skipped, frontend typecheck is a hard zero-error gate |
+| 0.8 | Decide the AI concierge: key it or remove the entry point | **DONE** | Entry point removed |
+| 0.9 | ~~**Fix test isolation**~~ | **DONE 2026-10-17** | Id handoffs replaced with per-test fixtures, the blanket row sweep removed, the Motor client resolved per event loop. Passes repeatedly in both modes with nothing excluded; the CI deselects are gone |
 
 **Exit:** deploying is routine rather than risky, and the three P0/P1 security
 findings from the audit are closed.
+
+> **Phase 0 is not closed.** Two items remain — 0.2 staging and the
+> `ALLOWED_ORIGINS` half of 0.5 — and 0.1 has been replaced by a larger piece
+> of work than it originally described. Everything shipped so far has gone
+> straight to production because there is nowhere else to send it.
 
 > **Rate-limit store (sub-decision):** Memorystore Redis is the obvious choice
 > but adds a VPC connector and ~₹3–5k/month. Cloud Armor rate limiting at the
@@ -117,18 +133,23 @@ findings from the audit are closed.
 ### Phase 1 — Public place pages, deep links, previews *(MVP)*
 
 **Depends on:** 0.1–0.3 (a deploy must be safe). **Effort: 2.5–3.5 weeks.**
+**Status: SHIPPED 2026-10-22.**
 
-| # | Work | Acceptance criteria |
-|---|---|---|
-| 1.1 | Public place pages at `explore91.com/place/{slug}`, server-rendered | A crawler with JavaScript disabled sees the place name, photo, area, description and city |
-| 1.2 | Public city pages; `sitemap.xml`; `robots.txt`; canonical URLs | Sitemap lists every live place and city and updates as content is added |
-| 1.3 | Open Graph + Twitter card tags | A link pasted into WhatsApp renders a card with the place name and photo — verified in WhatsApp, not just a validator |
-| 1.4 | iOS Universal Links + Android App Links (AASA / assetlinks.json hosted and verified) | Tapping a place link with the app installed opens the app at that place; without it, the web page |
-| 1.5 | Share sheet sends real URLs | Sharing a reel or place produces a link, not bare text (today it is text-only) |
-| 1.6 | Slugs for places, stable and unique | Renaming a place does not break existing links |
+| # | Work | Status | Acceptance criteria |
+|---|---|---|---|
+| 1.1 | Public place pages at `explore91.com/place/{slug}`, server-rendered | **DONE** | Jinja2 templates on a root-mounted router (Option A). A crawler with JavaScript disabled sees the name, photo, area, description and city |
+| 1.2 | Public city pages; `sitemap.xml`; `robots.txt`; canonical URLs | **DONE** | Cities with no content are omitted from the sitemap and marked `noindex`, so the content gate below is enforced in code rather than by discipline |
+| 1.3 | Open Graph + Twitter card tags | **DONE** | Absolute URLs, tested. **Not yet verified in WhatsApp itself** — the acceptance criterion asks for that specifically and it is outstanding |
+| 1.4 | iOS Universal Links + Android App Links | **ANDROID DONE** | `assetlinks.json` serves the debug and upload fingerprints and is in the production environment. **iOS is withheld deliberately** — `IOS_APP_ID` is unset, so the association file 404s rather than baking in a wrong appID that iOS would cache |
+| 1.5 | Share sheet sends real URLs | **DONE** | Sends `message` and `url` both, since iOS reads one and Android the other |
+| 1.6 | Slugs for places, stable and unique | **DONE** | Assigned at creation, backfilled on boot, and assigned on demand for any record that slips through |
 
 **Exit:** a place can be shared into WhatsApp, previews correctly, opens the app
 when installed, and is indexable by Google.
+
+> **Two gaps against that exit condition**, both small and both real: the
+> WhatsApp preview has never been checked in WhatsApp, and iOS deep links are
+> off until there is an Apple developer account.
 
 > **Dependency note:** 1.1–1.4 are the same infrastructure priority 5 needs for
 > invite previews. Building it here means Phase 3 gets it free.
@@ -442,13 +463,14 @@ Two consequences worth noting:
 
 ## 8b. Proposed launch cities
 
-Current content, measured against production:
+Current content, measured against production **2026-10-24** — unchanged from
+the 2026-10-17 measurement, which is itself the finding:
 
 | City | Places | Reels | State |
 |---|---|---|---|
 | Goa | 28 | 15 | Ready |
 | Ahmedabad | 26 | 9 | Ready |
-| Pune | 26 | **0** | Places only — no creator content |
+| Pune | 26 | **0** | Places only — the Reels tab is empty in a launch city |
 | Mumbai, Delhi, Jaipur, Udaipur, Varanasi, Leh, Kochi, Shillong | 0 | 0 | Empty |
 
 **Recommendation: Goa, Pune, Mumbai.**
@@ -471,38 +493,119 @@ What this does *not* mean is launching a city empty. The eleven-city list
 exists today and eight of those cities are blank; whichever three are chosen
 should be the only ones offered until they have content.
 
+> **Reassessed 2026-10-24 — this needs a decision, not another week.** A week
+> has passed and the numbers have not moved: Mumbai is still empty and Pune
+> still has no reels. Reels are the core mechanic, so a launch trio of Goa,
+> Pune and Mumbai currently ships **one** city with creator content and two
+> without.
+>
+> Measured against what exists rather than what the corridor story wants, the
+> trio available today is **Goa, Ahmedabad, Pune**. The honest choice is
+> between funding a Mumbai content build now — it is people and sourcing work
+> with a long tail, and it will not go faster by starting later — or swapping
+> Mumbai for Ahmedabad and making Mumbai the first post-launch city.
+>
+> This is not an engineering decision and nothing in engineering is waiting on
+> it, which is exactly why it has drifted for a week.
+
+---
+
+## 8c. What shipped since this plan was written
+
+Recorded because several phases above were written as future work and are now
+history, and because two of these were not in the plan at all.
+
+| | |
+|---|---|
+| **Phase 0** | Closed except for staging (0.2) and `ALLOWED_ORIGINS` (half of 0.5). Rate limiting, token hashing, index work, dependency pruning, CI and test isolation are all done |
+| **Phase 1** | Shipped in full — public place and city pages, sitemap, robots, Open Graph, Android App Links, real share URLs, stable slugs |
+| **Google Sign-In removed** | Built, then removed entirely on 2026-10-23. Installed-app clients cannot do the implicit flow the original code assumed, and the direction moved to OTP regardless. `/auth/google` now 404s |
+| **`/auth/dev` placeholder** | Takes an email, issues a session, verifies nothing. Inert unless `DEV_AUTH_ENABLED` is set, and 404s rather than 403s so an unconfigured deployment does not advertise it. **It is currently switched ON in production** — see §8d |
+| **Interface rebuilt** *(not in this plan)* | The app was monochrome; the website is emerald and gold on warm off-white, set in Outfit and Figtree. Every screen now carries the site's design language. Colour values were taken from the live site rather than converted by hand |
+| **Apple Sign-In** | Still present and still unconfigured — returns 503, having previously returned 500. Not a way in |
+
+---
+
+## 8d. Phase 0.1 (replacement) — OTP sign-in *(MVP, blocking)*
+
+**Depends on:** nothing technical. **Effort: 3–5 days of engineering, but see
+the lead time below.** This replaces the Google OAuth item and is now the
+single thing gating the most.
+
+Three separate things make this the critical path:
+
+1. **It is the only way to close the production hole.** `DEV_AUTH_ENABLED` is
+   on, so anyone who knows the API URL can sign in as any email — including
+   the address in `ADMIN_EMAILS`, which can then self-grant admin over the
+   real database. That cannot be turned off while it is the only way in.
+2. **Phase 2 is blocked behind it.** Identity, handles and private-by-default
+   were decided on 2026-10-17 (§8a) and have been idle since, because there is
+   no real identity to attach them to.
+3. **It is the line between a demo and an installable product.** Everything
+   else is polish on something a stranger still cannot sign in to.
+
+| # | Work | Acceptance criteria |
+|---|---|---|
+| 0.1a | Choose an SMS provider and complete DLT registration | Entity, header and template approved; a test OTP arrives on an Indian number |
+| 0.1b | `phone` on the user document, unique sparse index | An existing email-created account can attach a phone without a duplicate record |
+| 0.1c | `POST /auth/otp/send` and `/auth/otp/verify`, rate-limited per number *and* per caller | Brute-forcing a six-digit code is bounded; codes expire; a verified number returns a session indistinguishable from today's |
+| 0.1d | Second step on the login screen | The screen already takes an identifier and a Continue; this adds a step rather than a rewrite |
+| 0.1e | Remove `DEV_AUTH_ENABLED` from production; purge `dev_` sessions | `POST /auth/dev` → 404 on production. Sessions whose token began `dev_` are gone |
+
+> **Start the DLT registration this week, whatever else happens.** Sending
+> transactional SMS in India requires registration with the telecom operators
+> through a DLT platform — entity, header and template, each approved
+> separately — and the lead time is believed to be one to two weeks. Confirm
+> the current timeline with whichever provider is chosen; this is the kind of
+> dependency that becomes the critical path without anyone deciding it should.
+> If it is long, WhatsApp OTP or email OTP are worth pricing as a first cut,
+> since the endpoint shape does not change.
+
+> **Account continuity:** sign-in has matched on email since Google, and
+> `/auth/dev` kept that rule. Accounts created under either still resolve, and
+> will still resolve after OTP, provided phone is added alongside email rather
+> than replacing it.
+
 ---
 
 ## 9. Unresolved business decisions
 
 Engineering is blocked or at risk until these are answered. Ordered by when
-they are needed.
+they are needed. **Answered items are struck through and kept** — the record of
+what was decided is more useful than a shorter list.
 
 ### Needed for Phase 1
 1. **Public page content.** Do public place pages show user reviews and public
    collections, or only business-supplied content? Reviews are user content and
-   carry moderation and privacy obligations once indexed.
-2. **Empty cities.** Fill them, partner for content, or restrict launch to Goa,
-   Ahmedabad and Pune and exclude the rest from the sitemap?
+   carry moderation and privacy obligations once indexed. *(Still open. Pages
+   shipped showing business-supplied content only, which answers it in
+   practice but not on purpose.)*
+2. ~~**Empty cities.**~~ **ANSWERED in code 2026-10-22.** Cities with no
+   content are excluded from the sitemap and marked `noindex` automatically,
+   so this can no longer be got wrong by forgetting. The separate question of
+   *which three to launch* is §8b and is still open.
 
 ### Needed for Phase 2
-3. **Default visibility** for journey, saves and collections. The plan assumes
-   **private**. Confirm.
-4. **Is a handle mandatory at signup**, or assigned lazily when a user first
-   shares something?
+3. ~~**Default visibility**~~ **ANSWERED 2026-10-17 — private.** See §8a.
+4. ~~**Is a handle mandatory at signup**~~ **ANSWERED 2026-10-17 — assigned
+   lazily.** See §8a.
 
 ### Needed for Phase 3
-5. **What a logged-out invite viewer sees.** Plan assumes itinerary without
-   member identities. Confirm.
+5. ~~**What a logged-out invite viewer sees.**~~ **ANSWERED 2026-10-17.** Name,
+   destination, dates, itinerary and a trip-level budget range; never
+   participant identities, private comments, personal expenses or profile
+   information. See §8a.
 6. **Does an invite link grant edit or view by default?** Edit is friendlier;
    view is safer when links get forwarded.
 7. **Trip size limit**, and whether anyone can invite or only the owner.
 
 ### Needed for Phase 6
 8. **Pro vs Premium feature matrix.** Undefined today. A 6.7× price gap needs a
-   clear story.
-9. **Are ₹1,499 and ₹9,999 inclusive or exclusive of 18% GST?** Changes the
-   displayed price and the invoice.
+   clear story. **Requested 2026-10-17, still unwritten — see §10.3. This is
+   the cheapest unblocking act available and it keeps slipping.**
+9. ~~**Are ₹1,499 and ₹9,999 inclusive or exclusive of 18% GST?**~~
+   **ANSWERED 2026-10-17 — exclusive**, shown separately at checkout, subject
+   to confirmation with an accountant before billing goes live. See §8a.
 10. **Billing cycle**: monthly only, or annual with a discount? Free trial?
 11. **Refund and downgrade policy.**
 12. **What happens to a lapsed listing** — hidden, downgraded, or unchanged
@@ -523,20 +626,70 @@ they are needed.
 18. **Wallet points** — users hold balances (500 at signup, 50 per booking)
     with no redemption path. Honour them, convert them to something, or retire
     them with notice? They are a liability today.
-19. **Target launch geography** — all 11 cities, or 3 done properly?
+19. ~~**Target launch geography**~~ **ANSWERED 2026-10-17 — three cities done
+    properly.** Which three is still open; see §8b, where a week of no content
+    movement has changed what the honest answer is.
+20. **Apple Sign-In** — finish it or drop it? It is wired and verified against
+    Apple's JWKS but has never been configured, so it returns 503. It needs an
+    Apple developer account, which `IOS_APP_ID` and iOS deep links (1.4) also
+    need. One decision unblocks three items.
 
 ---
 
-## 10. Recommended immediate sequence
+## 10. Recommended immediate sequence *(revised 2026-10-24)*
 
-1. Answer decisions **3, 4 and 19** (cheap, unblock Phases 1–2).
-2. Start **Phase 0** — it is blocking and nothing in it is contentious.
-3. In parallel, decide the **public web surface option** (§2) and the **Pro /
-   Premium matrix** (decision 8), as both have long lead times.
-4. Begin Instagram business verification paperwork if Phase 7 is wanted this
-   year.
+The previous sequence is spent: decisions 3, 4 and 19 were answered on
+2026-10-17 (§8a), Phase 0 is closed but for two items, and the public web
+surface question was settled by building Option A.
+
+The app now *looks* finished and still cannot be given to a stranger. Three
+things stand in the way, and they are not equally hard.
+
+### 1. OTP sign-in — the critical path *(§8d)*
+
+Everything else is downstream of it. It is the only way to close the open
+production hole, Phase 2 has been idle behind it for a week, and it is the
+line between a demo build and an installable product.
+
+**Start the DLT registration immediately**, in parallel with everything else
+on this list. The engineering is 3–5 days; the paperwork may be longer, and it
+is the half nobody schedules.
+
+### 2. Content for the launch cities — in parallel, and not engineering
+
+Mumbai is a decided launch city with nothing in it. Pune has 26 places and
+zero reels, so its Reels tab — the core mechanic — is empty. This is people
+and sourcing work with a long tail and no engineering dependency, so it should
+be running while OTP is built, not after.
+
+It also needs the decision in §8b: fund Mumbai, or swap it for Ahmedabad.
+
+### 3. The Pro / Premium feature matrix — an hour that unblocks weeks
+
+Asked for on 2026-10-17 and still not written. It is a decision document, not
+code, and all of Phase 6 revenue work is behind it.
+
+### 4. Then: Phase 2 — identity, handles, private-by-default
+
+Fully specified in §8a, blocked only by there being no real identity yet.
+It becomes the obvious next build the day OTP lands.
 
 ---
 
-**No application code will be changed and nothing will be deployed until this
-plan is approved.**
+### Housekeeping to fold into the above
+
+Small, overdue, and each one a genuine exposure:
+
+| | |
+|---|---|
+| **Rotate the Atlas credential** | Pasted into a chat several sessions ago and never rotated |
+| **Set `ALLOWED_ORIGINS`** | Unset, so CORS is open to any origin. The server logs a warning about it on every boot |
+| **Delete `smoke-check@explore91.dev`** | A real user record created by deploy smoke tests, sitting in the production database |
+| **Close `DEV_AUTH_ENABLED`** | Deliberately open for test builds (`docs/DEPLOY_PLAN_001.md` §10). Closes itself as step 0.1e |
+| **Build staging (0.2)** | Tolerable while there were no users. It stops being tolerable the day OTP ships |
+
+### What not to start yet
+
+Creator marketplace (Phase 7), Friends and Circles (Phase 5), and booking
+commissions. All real; none of them survive contact with *there is no
+authentication and two of three launch cities are empty*.
