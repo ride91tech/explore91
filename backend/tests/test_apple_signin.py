@@ -55,7 +55,11 @@ def _as_fresh_client() -> dict:
     client. TRUSTED_PROXY_HOPS=1 means the limiter reads the last entry, which
     is what a proxy would have appended.
     """
-    return {"X-Forwarded-For": "198.51.100." + str(random.randint(2, 250))}
+    return {
+        "X-Forwarded-For": "10.{}.{}.{}".format(
+            random.randint(0, 255), random.randint(0, 255), random.randint(1, 254)
+        )
+    }
 
 
 def _dedicated_ip() -> str:

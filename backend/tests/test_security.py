@@ -250,8 +250,19 @@ class TestSEC003RateLimitBypass:
     @staticmethod
     def _unique_ip():
         """A fresh 'real' client address per test, so tests don't share a
-        bucket with each other or with a previous run in the same window."""
-        return "198.51.100." + str(random.randint(2, 250))
+        bucket with each other or with a previous run in the same window.
+
+        Drawn from 10.0.0.0/8, not a documentation /24. A /24 offers 249
+        addresses and this class draws several per run, which collided often
+        enough to fail in CI: a test that had already spent its budget handed
+        the same address to a later test, and the "separate clients keep
+        separate budgets" assertion saw a 429 where it expected a 200 —
+        reading exactly like a broken limiter. Sixteen million makes it a
+        non-event. The limiter only ever uses this as an opaque bucket key.
+        """
+        return "10.{}.{}.{}".format(
+            random.randint(0, 255), random.randint(0, 255), random.randint(1, 254)
+        )
 
     def _view(self, api_client, reel_id, xff):
         return api_client.post(
@@ -367,7 +378,11 @@ class TestSEC003RateLimits:
         # Present as a distinct client. Without this the bucket is keyed on the
         # shared loopback address, so any other test that views a reel at the
         # same moment — on another xdist worker — spends this test's budget.
-        hdr = {"X-Forwarded-For": "198.51.100." + str(random.randint(2, 250))}
+        hdr = {
+            "X-Forwarded-For": "10.{}.{}.{}".format(
+                random.randint(0, 255), random.randint(0, 255), random.randint(1, 254)
+            )
+        }
 
         # 60/min per IP -> hammer 70 times
         statuses = []

@@ -63,7 +63,11 @@ def _as_fresh_client() -> dict:
     error body. TRUSTED_PROXY_HOPS defaults to 1, so the limiter reads the
     last X-Forwarded-For entry, which is what a proxy would have appended.
     """
-    return {"X-Forwarded-For": "198.51.100." + str(random.randint(2, 250))}
+    return {
+        "X-Forwarded-For": "10.{}.{}.{}".format(
+            random.randint(0, 255), random.randint(0, 255), random.randint(1, 254)
+        )
+    }
 
 
 # Note for everything below: the rate limiter now runs BEFORE the body is
