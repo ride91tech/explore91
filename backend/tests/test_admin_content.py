@@ -345,6 +345,87 @@ class TestEditReel:
         assert r.status_code == 200, r.text
 
 
+class TestUnapprovingPullsReels:
+    """Unapproving a place must take its reels out of the app with it.
+
+    Found by auditing the console against the app rather than by reading the
+    code. Deleting a place already cascaded to its reels; unapproving one did
+    not, because the public feed filtered on `is_hidden` alone. So an admin
+    who pulled a listing left its reels playing, and a viewer who tapped one
+    landed on a place page that 404s. "Unapproved" meant two different things
+    depending on which surface you looked at.
+    """
+
+    @pytest.fixture
+    def place_with_reel(self, place, admin):
+        r = requests.post(
+            f"{BASE_URL}/api/admin/reels",
+            headers=admin["H"],
+            json={"business_id": place["business_id"], "city": "mumbai",
+                  "video_url": VIDEO, "caption": "TEST unapprove reel"},
+            timeout=20,
+        )
+        assert r.status_code == 201, r.text
+        reel = r.json()
+        yield place, reel
+        _run(_delete("reels", {"reel_id": reel["reel_id"]}))
+
+    def _in_feed(self, reel_id):
+        rows = requests.get(
+            f"{BASE_URL}/api/reels", params={"city": "mumbai", "limit": 100}, timeout=20
+        ).json()
+        return any(x["reel_id"] == reel_id for x in rows)
+
+    def test_the_reel_leaves_the_feed(self, place_with_reel, admin):
+        place, reel = place_with_reel
+        assert self._in_feed(reel["reel_id"]), "precondition: the reel is in the feed"
+
+        requests.patch(
+            f"{BASE_URL}/api/admin/businesses/{place['business_id']}",
+            headers=admin["H"], json={"is_approved": False}, timeout=20,
+        )
+        assert not self._in_feed(reel["reel_id"])
+
+    def test_it_comes_back_on_re_approval(self, place_with_reel, admin):
+        """Unlisting is reversible; the reel is not collateral damage."""
+        place, reel = place_with_reel
+        bid = place["business_id"]
+        requests.patch(
+            f"{BASE_URL}/api/admin/businesses/{bid}",
+            headers=admin["H"], json={"is_approved": False}, timeout=20,
+        )
+        requests.patch(
+            f"{BASE_URL}/api/admin/businesses/{bid}/approve",
+            headers=admin["H"], timeout=20,
+        )
+        assert self._in_feed(reel["reel_id"])
+
+    def test_the_direct_url_closes_too(self, place_with_reel, admin):
+        """Otherwise a reel pulled from the feed stays reachable by its id."""
+        place, reel = place_with_reel
+        requests.patch(
+            f"{BASE_URL}/api/admin/businesses/{place['business_id']}",
+            headers=admin["H"], json={"is_approved": False}, timeout=20,
+        )
+        r = requests.get(f"{BASE_URL}/api/reels/{reel['reel_id']}", timeout=20)
+        assert r.status_code == 404, r.text
+
+    def test_a_city_reel_is_unaffected(self, admin):
+        """City reels carry no business, so nothing can unlist them."""
+        r = requests.post(
+            f"{BASE_URL}/api/admin/reels",
+            headers=admin["H"],
+            json={"city": "mumbai", "video_url": VIDEO, "caption": "TEST city reel"},
+            timeout=20,
+        )
+        assert r.status_code == 201, r.text
+        doc = r.json()
+        try:
+            assert self._in_feed(doc["reel_id"])
+        finally:
+            _run(_delete("reels", {"reel_id": doc["reel_id"]}))
+
+
 class TestAuthorisation:
     """These endpoints write to the public catalogue. Who may call them is the
     most important thing about them."""

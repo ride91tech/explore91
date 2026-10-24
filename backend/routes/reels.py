@@ -14,6 +14,45 @@ from seed.data import CATEGORIES
 router = APIRouter()
 
 
+async def _unlisted_business_ids() -> list:
+    """Places that are not publicly listed, so their reels must not be either.
+
+    The public feed filtered on `is_hidden` alone, so unapproving a place left
+    its reels playing in the app while the place page they link to returned
+    404 — an admin pulling a listing had no reason to expect it was still
+    being promoted, and a viewer tapping through hit a dead end. Deleting a
+    place already cascaded to its reels; unapproving one did not.
+
+    This returns ids to EXCLUDE rather than filtering an already-fetched page,
+    and that distinction matters. Filtering after the limit let a page come
+    back short — or empty, if the only reel on it had just been unlisted —
+    while listed reels sat just below the cut. Excluding in the query keeps
+    `limit` meaning what it says.
+
+    A second query rather than a $lookup or a denormalised `is_approved` on
+    the reel. A denormalised copy would need keeping in step from four
+    separate write sites, which is where this class of bug comes from.
+    """
+    return [
+        b["business_id"]
+        async for b in db.businesses.find(
+            {"is_approved": False}, {"_id": 0, "business_id": 1}
+        )
+    ]
+
+
+async def _exclude_unlisted(query: dict) -> dict:
+    """Add the exclusion to a reels query.
+
+    `$nin` also matches documents whose field is missing or null, so city
+    reels — which carry no business_id — are kept.
+    """
+    unlisted = await _unlisted_business_ids()
+    if unlisted:
+        query["business_id"] = {"$nin": unlisted}
+    return query
+
+
 @router.get("/reels")
 async def list_reels(
     city: Optional[str] = None,
@@ -25,6 +64,7 @@ async def list_reels(
         query["city"] = city.lower()
     if category:
         query["business_category"] = category.lower()
+    await _exclude_unlisted(query)
     return (
         await db.reels.find(query, {"_id": 0})
         .sort("created_at", -1).limit(limit).to_list(limit)
@@ -45,6 +85,9 @@ async def reel_topics(city: Optional[str] = None):
     match: dict = {"is_hidden": {"$ne": True}}
     if city:
         match["city"] = city.lower()
+    # Same rule as the feed, or a rail counts reels the feed will not show and
+    # strands the viewer on an empty topic.
+    await _exclude_unlisted(match)
 
     rows = await db.reels.aggregate([
         {"$match": match},
@@ -71,6 +114,14 @@ async def get_reel(reel_id: str):
     doc = await db.reels.find_one({"reel_id": reel_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Reel not found")
+    # Same rule as the feed: a reel of an unlisted place is not public. Without
+    # this, a reel pulled from the feed stays reachable by its direct URL.
+    if doc.get("business_id"):
+        listed = await db.businesses.count_documents(
+            {"business_id": doc["business_id"], "is_approved": {"$ne": False}}, limit=1
+        )
+        if not listed:
+            raise HTTPException(status_code=404, detail="Reel not found")
     return doc
 
 

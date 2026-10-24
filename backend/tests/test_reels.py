@@ -139,13 +139,49 @@ class TestReelTopics:
 
 
 class TestReelDetail:
-    def test_get_single_reel(self, base_url, api_client):
-        r = api_client.get(f"{base_url}/api/reels", params={"limit": 1})
-        reel_id = r.json()[0]["reel_id"]
-        r2 = api_client.get(f"{base_url}/api/reels/{reel_id}")
-        assert r2.status_code == 200
+    @pytest.fixture
+    def own_reel(self):
+        """A reel this test owns.
+
+        It used to take the newest reel from the feed and then fetch it by id.
+        Both calls were fine individually, but anything that unlisted that
+        reel's place in between made the second one 404 — which is the correct
+        behaviour, just not what the test was asking about. A city reel
+        belongs to no place, so nothing can unlist it.
+        """
+        rid = f"reel_TESTdetail_{uuid.uuid4().hex[:8]}"
+
+        async def _mk():
+            client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+            await client[os.environ["DB_NAME"]].reels.insert_one({
+                "reel_id": rid,
+                "business_id": None,
+                "city": "goa",
+                "video_url": "https://x.com/v.mp4",
+                "cover_image": "https://x.com/c.jpg",
+                "caption": "TEST reel detail",
+                "author": "TEST",
+                "likes": 0,
+                "views": 0,
+                "is_hidden": False,
+                "created_at": datetime.now(timezone.utc),
+            })
+            client.close()
+
+        async def _rm():
+            client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+            await client[os.environ["DB_NAME"]].reels.delete_many({"reel_id": rid})
+            client.close()
+
+        asyncio.new_event_loop().run_until_complete(_mk())
+        yield rid
+        asyncio.new_event_loop().run_until_complete(_rm())
+
+    def test_get_single_reel(self, base_url, api_client, own_reel):
+        r2 = api_client.get(f"{base_url}/api/reels/{own_reel}")
+        assert r2.status_code == 200, r2.text
         doc = r2.json()
-        assert doc["reel_id"] == reel_id
+        assert doc["reel_id"] == own_reel
         assert "_id" not in doc
 
     def test_get_unknown_reel_404(self, base_url, api_client):
