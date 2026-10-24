@@ -90,6 +90,9 @@ export type Business = {
   open_hours: string;
   phone: string;
   is_featured: boolean;
+  /** The backend returns this on every business; it was simply missing from
+   *  this type. Discover's "Verified businesses" filter reads it. */
+  is_verified?: boolean;
   offers: string[];
   menu: { name: string; price: number; image?: string }[];
   services: { name: string; duration: string; price: number }[];
