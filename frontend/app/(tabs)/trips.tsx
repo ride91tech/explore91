@@ -14,7 +14,8 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/auth";
 import { api, Business, InterestPlace, JourneyT } from "@/src/api";
 import { BusinessCard } from "@/src/components/BusinessCard";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { JourneyCard } from "@/src/components/JourneyCard";
+import { colors, fonts, radius, shadow, spacing, text as tText, type as tType } from "@/src/theme";
 
 /**
  * Trips — everything saved, planned and remembered.
@@ -66,36 +67,20 @@ export default function Trips() {
   const header = (
     <View>
       <View style={styles.titleBlock}>
-        <Text style={styles.kicker}>CURRENTLY EXPLORING</Text>
-        <Text style={styles.city}>{user?.home_city ?? "Goa"}</Text>
+        <Text style={styles.kicker}>Currently exploring</Text>
+        <View style={styles.cityRow}>
+          <Ionicons name="location" size={14} color={colors.brandPrimary} />
+          <Text style={styles.city}>{user?.home_city ?? "Goa"}</Text>
+        </View>
         <Text style={styles.title}>Your Trips</Text>
         <Text style={styles.sub}>Everything you've saved, planned and remembered.</Text>
       </View>
 
-      <Pressable
+      <JourneyCard
         testID="journey-card"
+        journey={journey}
         onPress={() => router.push("/journey")}
-        style={styles.journeyCard}
-      >
-        <Text style={styles.journeyKicker}>EXPLORE91 JOURNEY</Text>
-        <Text style={styles.journeyTitle}>One India.{"\n"}Infinite Experiences.</Text>
-        <View style={styles.statRow}>
-          <Stat value={journey ? journey.cities : "—"} label={journey?.cities === 1 ? "CITY" : "CITIES"} />
-          <Stat value={journey ? journey.states : "—"} label={journey?.states === 1 ? "STATE" : "STATES"} />
-          <Stat value={journey ? `${journey.india_percent}%` : "—"} label="INDIA" />
-        </View>
-        {/* Union territories don't count toward the 28 states, so showing
-            them separately keeps a Delhi or Leh trip from looking like
-            nothing happened. */}
-        {journey && journey.union_territories > 0 ? (
-          <Text style={styles.utNote}>
-            + {journey.union_territories} union{" "}
-            {journey.union_territories === 1 ? "territory" : "territories"} of{" "}
-            {journey.union_territories_total}
-          </Text>
-        ) : null}
-        <Text style={styles.journeyCta}>Open your journey →</Text>
-      </Pressable>
+      />
 
       <View style={styles.segmentRow}>
         {SEGMENTS.map((s) => {
@@ -197,15 +182,6 @@ export default function Trips() {
   );
 }
 
-function Stat({ value, label }: { value: number | string; label: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 function SoonTile({
   icon,
   title,
@@ -217,7 +193,9 @@ function SoonTile({
 }) {
   return (
     <View style={styles.soonTile}>
-      <Ionicons name={icon} size={20} color={colors.onSurfaceTertiary} />
+      <View style={styles.soonIcon}>
+        <Ionicons name={icon} size={19} color={colors.brandPrimary} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.soonTitle}>{title}</Text>
         <Text style={styles.soonBlurb}>{blurb}</Text>
@@ -233,40 +211,25 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
   titleBlock: { marginBottom: spacing.lg },
-  kicker: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.2,
+  kicker: tText.eyebrow,
+  cityRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+  city: {
+    fontFamily: fonts.displaySemi,
+    fontSize: tType.lg,
+    color: colors.onSurface,
+  },
+  title: {
+    ...tText.displayTight,
+    fontSize: 30,
+    color: colors.onSurface,
+    marginTop: spacing.md,
+  },
+  sub: {
+    fontFamily: fonts.body,
+    fontSize: tType.base,
     color: colors.onSurfaceTertiary,
+    marginTop: 4,
   },
-  city: { fontSize: tType.base, fontWeight: "600", color: colors.onSurfaceSecondary, marginTop: 2 },
-  title: { fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6, marginTop: 6 },
-  sub: { fontSize: tType.base, color: colors.onSurfaceSecondary, marginTop: 4 },
-
-  journeyCard: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceSecondary,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  journeyKicker: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    color: colors.brandTertiary,
-  },
-  journeyTitle: { fontSize: 22, fontWeight: "800", color: colors.onSurface, lineHeight: 28 },
-  statRow: { flexDirection: "row", gap: spacing.xl, marginTop: spacing.sm },
-  stat: { gap: 2 },
-  statValue: { fontSize: 26, fontWeight: "800", color: colors.onSurface },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1,
-    color: colors.onSurfaceTertiary,
-  },
-  utNote: { fontSize: tType.sm, color: colors.onSurfaceSecondary },
-  journeyCta: { fontSize: tType.base, fontWeight: "700", color: colors.brandTertiary, marginTop: 4 },
 
   segmentRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xl },
   segment: {
@@ -278,46 +241,70 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     height: 44,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceSecondary,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  segmentActive: { backgroundColor: colors.brandTertiary },
-  segmentLabel: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurfaceSecondary },
-  segmentLabelActive: { color: "#FFF" },
-  segmentCount: { fontSize: tType.sm, fontWeight: "700", color: colors.onSurfaceTertiary },
+  segmentActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  segmentLabel: { fontFamily: fonts.bodySemi, fontSize: tType.sm, color: colors.onSurface },
+  segmentLabelActive: { color: colors.onBrandPrimary },
+  segmentCount: { fontFamily: fonts.bodySemi, fontSize: tType.sm, color: colors.onSurfaceTertiary },
   segmentCountActive: { color: "rgba(255,255,255,0.9)" },
-  segmentBlurb: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: spacing.sm },
+  segmentBlurb: {
+    fontFamily: fonts.body,
+    fontSize: tType.sm,
+    color: colors.onSurfaceTertiary,
+    marginTop: spacing.sm,
+  },
 
   empty: {
     alignItems: "center",
     gap: spacing.sm,
     paddingVertical: spacing.xl,
   },
-  emptyTitle: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
-  emptySub: { fontSize: tType.base, color: colors.onSurfaceSecondary, textAlign: "center" },
-
-  soonHead: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.2,
+  emptyTitle: { fontFamily: fonts.display, fontSize: tType.lg, color: colors.onSurface },
+  emptySub: {
+    fontFamily: fonts.body,
+    fontSize: tType.base,
     color: colors.onSurfaceTertiary,
+    textAlign: "center",
   },
+
+  soonHead: tText.eyebrow,
   soonTile: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.card,
   },
-  soonTitle: { fontSize: tType.base, fontWeight: "700", color: colors.onSurface },
-  soonBlurb: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
+  // Tinted icon square, as on the site's Trips tiles.
+  soonIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(63,132,57,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  soonTitle: { fontFamily: fonts.displaySemi, fontSize: tType.base, color: colors.onSurface },
+  soonBlurb: {
+    fontFamily: fonts.body,
+    fontSize: tType.sm,
+    color: colors.onSurfaceTertiary,
+    marginTop: 2,
+  },
   soonPill: {
     paddingHorizontal: 10,
     height: 24,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceTertiary,
+    backgroundColor: colors.surfaceSecondary,
     alignItems: "center",
     justifyContent: "center",
   },
-  soonPillText: { fontSize: 10, fontWeight: "700", color: colors.onSurfaceSecondary },
+  soonPillText: { fontFamily: fonts.bodySemi, fontSize: 10, color: colors.onSurfaceTertiary },
 });
