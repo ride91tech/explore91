@@ -149,7 +149,7 @@ export default function Trips() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
         data={items}
         keyExtractor={(b) => b.business_id}

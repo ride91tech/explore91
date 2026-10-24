@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: "#FFF", fontSize: tType.base, fontWeight: "700" },
   secondaryLink: { color: colors.onSurfaceTertiary, fontSize: tType.sm, marginTop: 8 },
 
-  mobileShell: { flex: 1, backgroundColor: colors.surface } as any,
+  mobileShell: { flex: 1, backgroundColor: colors.background } as any,
   mobileHeader: {
     flexDirection: "row",
     alignItems: "center",

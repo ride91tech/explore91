@@ -7,6 +7,7 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -15,9 +16,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth";
 import { api, Business, CategoryT, CityT } from "@/src/api";
-import { Chip } from "@/src/components/Chip";
+import { CategoryTile } from "@/src/components/CategoryTile";
+import type { IconName } from "@/src/icons";
 import { BusinessCard } from "@/src/components/BusinessCard";
-import { colors, radius, spacing, type as tType } from "@/src/theme";
+import { colors, fonts, radius, shadow, spacing, text as tText, type as tType } from "@/src/theme";
 
 export default function Discover() {
   const insets = useSafeAreaInsets();
@@ -34,6 +36,12 @@ export default function Discover() {
   const cityName = user?.home_city ?? "Goa";
   const citySlug = cityName.toLowerCase();
   const heroCity = cities.find((c) => c.slug === citySlug);
+
+  // The site puts a time-of-day kicker above the city name. Derived from the
+  // device clock rather than stored, so it is true without needing an API.
+  const hour = new Date().getHours();
+  const timeOfDay =
+    hour < 12 ? "This morning" : hour < 17 ? "This afternoon" : "Tonight";
 
   const load = useCallback(async () => {
     try {
@@ -66,74 +74,105 @@ export default function Discover() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
       >
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        {/* Full-bleed hero. Runs under the status bar and is overlapped by the
+            sheet below, which is what gives the site its layered feel — a
+            bordered card in a scroll view does not read the same way. */}
+        <View style={styles.hero}>
+          {heroCity ? (
+            <Image
+              source={{ uri: heroCity.image }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={220}
+            />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.ink }]} />
+          )}
+          <LinearGradient
+            colors={["rgba(14,22,15,0.35)", "rgba(14,22,15,0.15)", "rgba(14,22,15,0.92)"]}
+            locations={[0, 0.42, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+
+          <View style={[styles.heroTop, { paddingTop: insets.top + spacing.sm }]}>
+            <Pressable
+              testID="city-selector"
+              style={styles.cityPill}
+              onPress={() => router.push("/city")}
+            >
+              <View style={styles.pinCircle}>
+                <Ionicons name="location" size={14} color="#FFF" />
+              </View>
+              <View>
+                <Text style={styles.heroEyebrow}>Currently exploring</Text>
+                <Text style={styles.cityName}>{cityName}</Text>
+              </View>
+              <Ionicons name="chevron-down" size={15} color="rgba(255,255,255,0.8)" />
+            </Pressable>
+
+            <Pressable
+              testID="header-avatar"
+              style={styles.avatar}
+              onPress={() => router.push("/(tabs)/profile")}
+            >
+              {user?.picture ? (
+                <Image source={{ uri: user.picture }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+              ) : (
+                <Text style={styles.avatarText}>{(user?.name?.[0] || "U").toUpperCase()}</Text>
+              )}
+            </Pressable>
+          </View>
+
+          <View style={styles.heroBottom}>
+            <Text style={styles.heroEyebrow}>{timeOfDay}</Text>
+            <Text style={styles.heroCity} numberOfLines={1} adjustsFontSizeToFit>
+              {heroCity?.name ?? cityName}
+            </Text>
+            {heroCity?.tagline ? (
+              <Text style={styles.heroTag}>{heroCity.tagline}</Text>
+            ) : null}
+            {/* The site shows weather here. There is no weather source, so
+                this carries the city's real state and region instead of
+                inventing a temperature. */}
+            {heroCity?.state ? (
+              <Text style={styles.heroMeta}>
+                {[heroCity.state, heroCity.region].filter(Boolean).join("  ·  ")}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        {/* The sheet that overlaps the hero. */}
+        <View style={styles.sheet}>
           <Pressable
-            testID="city-selector"
-            style={styles.citySelector}
-            onPress={() => router.push("/city")}
+            testID="home-search"
+            style={styles.search}
+            onPress={() => router.push("/(tabs)/explore")}
           >
-            <Ionicons name="location" size={16} color={colors.brandTertiary} />
-            <Text style={styles.cityName}>{cityName}</Text>
-            <Ionicons name="chevron-down" size={16} color={colors.onSurface} />
-          </Pressable>
-          <Pressable
-            testID="header-avatar"
-            style={styles.avatar}
-            onPress={() => router.push("/(tabs)/profile")}
-          >
-            {user?.picture ? (
-              <Image source={{ uri: user.picture }} style={{ width: 36, height: 36, borderRadius: 18 }} />
-            ) : (
-              <Text style={styles.avatarText}>{(user?.name?.[0] || "U").toUpperCase()}</Text>
-            )}
+            <Ionicons name="search" size={18} color={colors.onSurfaceTertiary} />
+            <Text style={styles.searchText}>Search places, food, stays, reels…</Text>
+            <View style={styles.searchGo}>
+              <Ionicons name="arrow-forward" size={16} color={colors.onBrandPrimary} />
+            </View>
           </Pressable>
         </View>
 
-        {/* Search bar (routes to explore) */}
-        <Pressable
-          testID="home-search"
-          style={styles.search}
-          onPress={() => router.push("/(tabs)/explore")}
-        >
-          <Ionicons name="search" size={18} color={colors.onSurfaceTertiary} />
-          <Text style={styles.searchText}>Search for restaurants, hotels, spas…</Text>
-        </Pressable>
-
-        {/* Hero city card */}
-        {heroCity ? (
-          <Pressable
-            testID="hero-city-card"
-            onPress={() => router.push("/city")}
-            style={styles.hero}
-          >
-            <Image source={{ uri: heroCity.image }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            <LinearGradient
-              colors={["transparent", "rgba(17,17,17,0.9)"]}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.heroInfo}>
-              <Text style={styles.heroKicker}>The Explore91 edit</Text>
-              <Text style={styles.heroTitle}>{heroCity.name}</Text>
-              <Text style={styles.heroTag}>{heroCity.tagline}</Text>
-            </View>
-          </Pressable>
-        ) : null}
-
         {/* Categories */}
         <View style={{ marginTop: spacing.xl }}>
+          <Text style={[styles.eyebrow, { paddingHorizontal: spacing.lg }]}>Explore</Text>
           <SectionHeader title="Browse by category" />
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipRow}
           >
-            {categories.map((c) => (
-              <Chip
+            {categories.map((c, i) => (
+              <CategoryTile
                 key={c.slug}
                 testID={`cat-${c.slug}`}
                 label={c.name}
-                icon={c.icon as any}
+                icon={c.icon as IconName | undefined}
+                index={i}
                 onPress={() => router.push({ pathname: "/(tabs)/explore", params: { category: c.slug } })}
               />
             ))}
@@ -262,63 +301,122 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptyCityBtnText: { color: "#FFF", fontWeight: "700", fontSize: tType.base },
-  container: { flex: 1, backgroundColor: colors.surface },
-  header: {
+  container: { flex: 1, backgroundColor: colors.background },
+  // Just over half the viewport, as on the site. Tall enough for the city
+  // name to dominate, short enough that the sheet below is clearly content
+  // waiting to be scrolled rather than a second screen.
+  hero: {
+    height: Math.round(Dimensions.get("window").height * 0.56),
+    justifyContent: "space-between",
+  },
+  heroTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
   },
-  citySelector: {
+  cityPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceSecondary,
+    gap: spacing.sm,
   },
-  cityName: { fontSize: tType.lg, fontWeight: "700", color: colors.onSurface },
+  pinCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroEyebrow: {
+    ...tText.eyebrow,
+    color: "rgba(255,255,255,0.72)",
+  },
+  cityName: {
+    fontFamily: fonts.displaySemi,
+    fontSize: tType.lg,
+    color: "#FFF",
+    marginTop: 1,
+  },
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: radius.pill,
     backgroundColor: colors.brandPrimary,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.35)",
   },
-  avatarText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
+  avatarText: { color: "#FFF", fontFamily: fonts.bodyBold, fontSize: 16 },
 
+  heroBottom: {
+    paddingHorizontal: spacing.lg,
+    // Clears the sheet, which is pulled up over the bottom of the hero.
+    paddingBottom: spacing.xxl + spacing.lg,
+  },
+  heroCity: {
+    ...tText.displayTight,
+    fontSize: tType.hero,
+    color: "#FFF",
+    marginTop: 2,
+  },
+  heroTag: {
+    fontFamily: fonts.body,
+    fontSize: tType.lg,
+    color: "rgba(255,255,255,0.88)",
+    marginTop: 4,
+  },
+  heroMeta: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: tType.sm,
+    color: "rgba(255,255,255,0.62)",
+    marginTop: spacing.sm,
+  },
+
+  // Pulled up over the hero. The large top radius is the shape the site uses
+  // wherever content rises over photography.
+  sheet: {
+    marginTop: -spacing.xxl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xs,
+    borderTopLeftRadius: radius.xxxl,
+    borderTopRightRadius: radius.xxxl,
+    backgroundColor: colors.background,
+  },
   search: {
     marginHorizontal: spacing.lg,
-    marginTop: spacing.sm,
-    height: 48,
+    height: 52,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceSecondary,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingLeft: 18,
+    paddingRight: 6,
     gap: 10,
+    ...shadow.card,
   },
-  searchText: { color: colors.onSurfaceTertiary, fontSize: tType.base },
-
-  hero: {
-    marginTop: spacing.lg,
-    marginHorizontal: spacing.lg,
-    height: 220,
-    borderRadius: radius.lg,
-    overflow: "hidden",
-    justifyContent: "flex-end",
+  searchText: { flex: 1, color: colors.onSurfaceTertiary, fontFamily: fonts.body, fontSize: tType.base },
+  searchGo: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  heroInfo: { padding: spacing.lg },
-  heroKicker: { color: colors.brandTertiary, fontSize: 11, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase" },
-  heroTitle: { color: "#FFF", fontSize: 32, fontWeight: "800", marginTop: 4, letterSpacing: -0.6 },
-  heroTag: { color: "rgba(255,255,255,0.85)", fontSize: 14, marginTop: 2 },
 
-  chipRow: { paddingHorizontal: spacing.lg, gap: 8, paddingVertical: 4 },
+  eyebrow: tText.eyebrow,
 
-  sectionTitle: { fontSize: tType.xl, fontWeight: "700", color: colors.onSurface, letterSpacing: -0.3 },
-  sectionSub: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2 },
+  chipRow: { paddingHorizontal: spacing.lg, gap: spacing.md, paddingVertical: spacing.sm },
+
+  sectionTitle: {
+    ...tText.displayLoose,
+    fontSize: tType.xxl,
+    color: colors.onSurface,
+  },
+  sectionSub: { fontSize: tType.sm, color: colors.onSurfaceTertiary, marginTop: 2, fontFamily: fonts.body },
 });

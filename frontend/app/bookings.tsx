@@ -59,7 +59,7 @@ export default function Bookings() {
   const past = bookings.filter((b) => !isUpcoming(b));
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable testID="back-bookings" onPress={() => router.back()} style={styles.close}>
           <Ionicons name="chevron-back" size={22} color={colors.onSurface} />

@@ -47,7 +47,7 @@ export default function Profile() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.surface }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: 120 }}
     >
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>

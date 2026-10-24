@@ -280,7 +280,7 @@ function RecapRow({ icon, label, value }: { icon: any; label: string; value: str
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.surface },
+  container: { flex: 1, backgroundColor: colors.background },
   loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   header: {
     flexDirection: "row",

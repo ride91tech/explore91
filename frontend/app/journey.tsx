@@ -59,7 +59,7 @@ export default function Journey() {
   const visited = journey?.visited ?? [];
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable onPress={() => router.back()} testID="close-journey" style={styles.close}>
           <Ionicons name="chevron-back" size={22} color={colors.onSurface} />

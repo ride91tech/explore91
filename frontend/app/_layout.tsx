@@ -7,7 +7,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
-import { useIconFonts } from "@/src/hooks/use-icon-fonts";
+import { useAppFonts } from "@/src/hooks/use-icon-fonts";
+import { colors } from "@/src/theme";
 import { AuthProvider, useAuth } from "@/src/auth";
 import { ToastHost } from "@/src/components/Toast";
 
@@ -47,7 +48,7 @@ function AuthGate() {
   }, [user, loading, segments, router]);
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FFFFFF" } }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
       <Stack.Screen name="login" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="business/[id]" options={{ presentation: "card", animation: "slide_from_right" }} />
@@ -64,7 +65,7 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
-  const [loaded, error] = useIconFonts();
+  const [loaded, error] = useAppFonts();
 
   useEffect(() => {
     if (loaded || error) SplashScreen.hideAsync();

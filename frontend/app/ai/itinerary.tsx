@@ -53,7 +53,7 @@ export default function ItineraryScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable testID="itin-close" onPress={() => router.back()} style={styles.close}>
           <Ionicons name="close" size={22} color={colors.onSurface} />

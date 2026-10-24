@@ -223,7 +223,7 @@ export default function BusinessDetail() {
     : biz.booking_type === "instant" ? "Book Now" : "Reserve Table";
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
         {/* Gallery */}
         <View style={{ height: 380 }}>

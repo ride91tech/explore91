@@ -68,7 +68,7 @@ export default function CityPicker() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable onPress={() => router.back()} testID="close-city" style={styles.close}>
           <Ionicons name="close" size={22} color={colors.onSurface} />
