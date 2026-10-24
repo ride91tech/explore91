@@ -146,10 +146,23 @@ SAMPLE_IMAGES = {
     "services": ["https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&q=80"],
 }
 
+# City centroids, used as the fallback when a place is created without
+# coordinates. Every city in CITIES needs an entry: a missing one silently
+# fell through to Goa, so a Mumbai venue added from the admin console would
+# have been pinned 400km out to sea off the Konkan coast. Keep this in step
+# with CITIES.
 CITY_COORDS = {
     "goa": (15.2993, 74.1240),
     "ahmedabad": (23.0225, 72.5714),
     "pune": (18.5204, 73.8567),
+    "mumbai": (19.0760, 72.8777),
+    "delhi": (28.6139, 77.2090),
+    "jaipur": (26.9124, 75.7873),
+    "udaipur": (24.5854, 73.7125),
+    "varanasi": (25.3176, 82.9739),
+    "leh": (34.1526, 77.5771),
+    "kochi": (9.9312, 76.2673),
+    "shillong": (25.5788, 91.8933),
 }
 
 

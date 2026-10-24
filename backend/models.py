@@ -112,6 +112,133 @@ class BusinessCreate(BaseModel):
     booking_type: str = "reservation"
 
 
+class AdminBusinessCreate(BusinessCreate):
+    """A place created by an admin rather than claimed by its owner.
+
+    Separate from BusinessCreate because an admin is curating the catalogue,
+    not registering their own venue, and so gets fields an owner does not:
+
+      * `is_approved` defaults True — an admin approving their own entry a
+        moment after creating it is ceremony, not review.
+      * `owner_id` stays empty. The place is unclaimed, which is honest: an
+        owner can claim it later and the audit trail shows who seeded it.
+      * Coordinates are accepted, because seeding a city means placing pins on
+        a map, and falling back to the city centroid for every venue makes the
+        map useless.
+    """
+
+    lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    lng: Optional[float] = Field(default=None, ge=-180, le=180)
+    phone: str = Field(default="", max_length=32)
+    open_hours: str = Field(default="10:00 AM - 11:00 PM", max_length=80)
+    gallery: List[str] = Field(default_factory=list, max_length=12)
+    is_approved: bool = True
+    is_featured: bool = False
+
+    @field_validator("cover_image")
+    @classmethod
+    def _cover_https(cls, v: Optional[str]):
+        if v and not ALLOWED_URL.match(v):
+            raise ValueError("Must be an https:// URL")
+        return v
+
+    @field_validator("gallery")
+    @classmethod
+    def _gallery_https(cls, v: List[str]):
+        for url in v:
+            if not ALLOWED_URL.match(url):
+                raise ValueError("Every gallery image must be an https:// URL")
+        return v
+
+
+class AdminBusinessUpdate(BaseModel):
+    """A partial edit. Every field optional; only what is sent is written.
+
+    Deliberately does not accept `city` or `category` as free text without the
+    same normalisation the create path applies — see the route, which lowercases
+    both. Nor does it accept `slug`: slugs are permanent public URLs, and
+    letting them be edited silently breaks every link already shared.
+    """
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    category: Optional[str] = Field(default=None, max_length=40)
+    city: Optional[str] = Field(default=None, max_length=40)
+    address: Optional[str] = Field(default=None, max_length=200)
+    area: Optional[str] = Field(default=None, max_length=80)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    why_go: Optional[str] = Field(default=None, max_length=280)
+    cover_image: Optional[str] = Field(default=None, max_length=500)
+    gallery: Optional[List[str]] = Field(default=None, max_length=12)
+    price_range: Optional[str] = Field(default=None, max_length=8)
+    tags: Optional[List[str]] = Field(default=None, max_length=12)
+    phone: Optional[str] = Field(default=None, max_length=32)
+    open_hours: Optional[str] = Field(default=None, max_length=80)
+    lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    lng: Optional[float] = Field(default=None, ge=-180, le=180)
+    booking_type: Optional[str] = Field(default=None, max_length=24)
+    is_approved: Optional[bool] = None
+    is_featured: Optional[bool] = None
+    is_verified: Optional[bool] = None
+
+    @field_validator("cover_image")
+    @classmethod
+    def _cover_https(cls, v: Optional[str]):
+        if v and not ALLOWED_URL.match(v):
+            raise ValueError("Must be an https:// URL")
+        return v
+
+    @field_validator("gallery")
+    @classmethod
+    def _gallery_https(cls, v: Optional[List[str]]):
+        for url in v or []:
+            if not ALLOWED_URL.match(url):
+                raise ValueError("Every gallery image must be an https:// URL")
+        return v
+
+
+class AdminReelCreate(BaseModel):
+    """A reel created by an admin.
+
+    Unlike ReelCreate, `business_id` is optional: a city reel that is not of
+    any one venue is a legitimate thing to publish while seeding a city, and
+    forcing a venue onto it would be inventing an association.
+    """
+
+    business_id: Optional[str] = Field(default=None, max_length=64)
+    city: str = Field(min_length=1, max_length=40)
+    video_url: str = Field(min_length=8, max_length=500)
+    cover_image: Optional[str] = Field(default=None, max_length=500)
+    caption: str = Field(min_length=1, max_length=280)
+    author: str = Field(default="Explore91", max_length=60)
+
+    @field_validator("video_url", "cover_image")
+    @classmethod
+    def _valid_https(cls, v: Optional[str]):
+        if v is None or v == "":
+            return v
+        if not ALLOWED_URL.match(v):
+            raise ValueError("Must be an https:// URL")
+        return v
+
+
+class AdminReelUpdate(BaseModel):
+    caption: Optional[str] = Field(default=None, min_length=1, max_length=280)
+    cover_image: Optional[str] = Field(default=None, max_length=500)
+    video_url: Optional[str] = Field(default=None, max_length=500)
+    author: Optional[str] = Field(default=None, max_length=60)
+    business_id: Optional[str] = Field(default=None, max_length=64)
+    is_hidden: Optional[bool] = None
+
+    @field_validator("video_url", "cover_image")
+    @classmethod
+    def _valid_https(cls, v: Optional[str]):
+        if v is None or v == "":
+            return v
+        if not ALLOWED_URL.match(v):
+            raise ValueError("Must be an https:// URL")
+        return v
+
+
 # --- Bookings & interactions ----------------------------------------------
 class BookingCreate(BaseModel):
     business_id: str = Field(min_length=1, max_length=64)

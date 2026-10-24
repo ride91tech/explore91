@@ -12,7 +12,12 @@ from core import audit
 from routes.catalog import content_counts, with_content
 from core.db import db
 from core.security import get_current_user, require_role
+from core.slug import ensure_business_slug, unique_slug
 from models import (
+    AdminBusinessCreate,
+    AdminBusinessUpdate,
+    AdminReelCreate,
+    AdminReelUpdate,
     BannerUpdate,
     BannerUpsert,
     CategoryUpsert,
@@ -20,7 +25,7 @@ from models import (
     FraudFlagCreate,
     TicketUpdate,
 )
-from seed.data import CATEGORIES, CITIES
+from seed.data import CATEGORIES, CITIES, CITY_COORDS, SAMPLE_IMAGES
 
 router = APIRouter()
 
@@ -148,6 +153,121 @@ async def admin_list_businesses(
     return rows
 
 
+@router.post("/admin/businesses", status_code=201)
+async def admin_create_business(
+    payload: AdminBusinessCreate, current=Depends(get_current_user)
+):
+    """Add a place to the catalogue directly.
+
+    Until this existed the only way a place entered the system was
+    POST /owner/businesses, which requires an owner account — so seeding a
+    city meant either one business-owner login per venue or running scripts
+    against production. Neither is something the person doing the content
+    work can do from a browser.
+
+    The place is unclaimed: `owner_id` is empty rather than pointed at the
+    admin, because an admin curating a catalogue is not the proprietor, and a
+    real owner should be able to claim it later. The audit entry records who
+    seeded it.
+    """
+    require_role(current, "admin")
+
+    city = payload.city.strip().lower()
+    category = payload.category.strip().lower()
+
+    # Coordinates matter when seeding a city — a map where every pin sits on
+    # the centroid is worse than no map — but the centroid is a reasonable
+    # fallback for a venue whose location is not yet known.
+    lat, lng = payload.lat, payload.lng
+    if lat is None or lng is None:
+        lat, lng = CITY_COORDS.get(city, (15.3, 74.1))
+
+    cover = payload.cover_image or SAMPLE_IMAGES.get(
+        category, SAMPLE_IMAGES["services"]
+    )[0]
+
+    business_id = f"biz_{uuid.uuid4().hex[:10]}"
+
+    async def taken(candidate: str) -> bool:
+        return await db.businesses.count_documents({"slug": candidate}, limit=1) > 0
+
+    doc = {
+        "business_id": business_id,
+        "owner_id": "",
+        "name": payload.name.strip(),
+        "category": category,
+        "city": city,
+        "address": payload.address,
+        "area": payload.area,
+        "lat": lat,
+        "lng": lng,
+        "cover_image": cover,
+        "gallery": payload.gallery or [cover],
+        "rating": 0.0,
+        "review_count": 0,
+        "price_range": payload.price_range,
+        "tags": payload.tags,
+        "description": payload.description,
+        "why_go": payload.why_go,
+        "open_hours": payload.open_hours,
+        "phone": payload.phone,
+        "is_verified": True,
+        "is_featured": payload.is_featured,
+        "is_approved": payload.is_approved,
+        "offers": [],
+        "menu": [],
+        "services": [],
+        "booking_type": payload.booking_type,
+        "slug": await unique_slug(
+            payload.name, city, exists=taken, fallback=business_id
+        ),
+    }
+    await db.businesses.insert_one(dict(doc))
+    doc.pop("_id", None)
+
+    await audit.record(
+        current, "business.create", "business", business_id,
+        after={"name": doc["name"], "city": city, "is_approved": doc["is_approved"]},
+        note="created from the admin console",
+    )
+    return doc
+
+
+@router.patch("/admin/businesses/{business_id}")
+async def admin_update_business(
+    business_id: str, payload: AdminBusinessUpdate, current=Depends(get_current_user)
+):
+    """Edit a place. Only the fields sent are written.
+
+    `slug` is deliberately not editable. It is a permanent public URL that may
+    already have been shared and indexed, and silently repointing it breaks
+    every one of those links.
+    """
+    require_role(current, "admin")
+    before = await db.businesses.find_one({"business_id": business_id}, {"_id": 0})
+    if not before:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    patch = payload.model_dump(exclude_unset=True, exclude_none=True)
+    for field in ("city", "category"):
+        if field in patch:
+            patch[field] = patch[field].strip().lower()
+    if "name" in patch:
+        patch["name"] = patch["name"].strip()
+    if not patch:
+        return before
+
+    await db.businesses.update_one({"business_id": business_id}, {"$set": patch})
+    after = await db.businesses.find_one({"business_id": business_id}, {"_id": 0})
+
+    await audit.record(
+        current, "business.update", "business", business_id,
+        before={k: before.get(k) for k in patch},
+        after=patch,
+    )
+    return after
+
+
 @router.patch("/admin/businesses/{business_id}/approve")
 async def admin_approve_business(
     business_id: str, current=Depends(get_current_user)
@@ -232,6 +352,105 @@ async def admin_list_reels(
     )
     response.headers["X-Total-Count"] = str(total)
     return rows
+
+
+@router.post("/admin/reels", status_code=201)
+async def admin_create_reel(
+    payload: AdminReelCreate, current=Depends(get_current_user)
+):
+    """Publish a reel.
+
+    Reels are the core discovery mechanic, and until now the only way to add
+    one was POST /owner/reels, which belongs to a business owner. A city with
+    places but no reels — Pune, today — had no route to fix that from a
+    browser.
+
+    `business_id` is optional. A city reel that is not of one venue is a real
+    thing while seeding, and attaching an arbitrary business to it would be
+    inventing an association that then shows up as a link on the reel.
+    """
+    require_role(current, "admin")
+
+    city = payload.city.strip().lower()
+    biz = None
+    if payload.business_id:
+        biz = await db.businesses.find_one(
+            {"business_id": payload.business_id}, {"_id": 0}
+        )
+        if not biz:
+            raise HTTPException(status_code=404, detail="Business not found")
+        # The reel belongs to the place's city, not whatever was typed.
+        city = biz.get("city", city)
+
+    reel_id = f"reel_{uuid.uuid4().hex[:10]}"
+    doc = {
+        "reel_id": reel_id,
+        "business_id": biz["business_id"] if biz else None,
+        "business_name": biz["name"] if biz else None,
+        # Denormalised so a shared reel has somewhere to point; reels have no
+        # public page of their own. ensure_business_slug assigns one if the
+        # place somehow lacks it.
+        "business_slug": await ensure_business_slug(biz) if biz else None,
+        "business_category": biz.get("category") if biz else None,
+        "city": city,
+        "video_url": payload.video_url,
+        "cover_image": payload.cover_image or (biz.get("cover_image") if biz else ""),
+        "caption": payload.caption.strip(),
+        "author": payload.author.strip() or "Explore91",
+        "likes": 0,
+        "views": 0,
+        "is_hidden": False,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.reels.insert_one(dict(doc))
+    doc.pop("_id", None)
+
+    await audit.record(
+        current, "reel.create", "reel", reel_id,
+        after={"city": city, "caption": doc["caption"], "business_id": doc["business_id"]},
+        note="created from the admin console",
+    )
+    return doc
+
+
+@router.patch("/admin/reels/{reel_id}")
+async def admin_update_reel(
+    reel_id: str, payload: AdminReelUpdate, current=Depends(get_current_user)
+):
+    """Edit a reel. Only the fields sent are written."""
+    require_role(current, "admin")
+    before = await db.reels.find_one({"reel_id": reel_id}, {"_id": 0})
+    if not before:
+        raise HTTPException(status_code=404, detail="Reel not found")
+
+    patch = payload.model_dump(exclude_unset=True, exclude_none=True)
+
+    # Repointing a reel at another place has to carry the denormalised fields
+    # with it, or the reel keeps linking to the previous venue.
+    if "business_id" in patch:
+        biz = await db.businesses.find_one(
+            {"business_id": patch["business_id"]}, {"_id": 0}
+        )
+        if not biz:
+            raise HTTPException(status_code=404, detail="Business not found")
+        patch.update({
+            "business_name": biz["name"],
+            "business_slug": await ensure_business_slug(biz),
+            "business_category": biz.get("category"),
+            "city": biz.get("city", before.get("city")),
+        })
+
+    if not patch:
+        return before
+
+    await db.reels.update_one({"reel_id": reel_id}, {"$set": patch})
+    after = await db.reels.find_one({"reel_id": reel_id}, {"_id": 0})
+    await audit.record(
+        current, "reel.update", "reel", reel_id,
+        before={k: before.get(k) for k in patch},
+        after=patch,
+    )
+    return after
 
 
 @router.patch("/admin/reels/{reel_id}/visibility")
