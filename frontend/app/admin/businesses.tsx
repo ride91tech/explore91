@@ -9,6 +9,7 @@ import {
   SearchInput, Pagination, ResultCount, Loading,
 } from "@/src/components/admin/ui";
 import { useAsyncAction } from "@/src/components/admin/feedback";
+import { AddPlaceForm } from "@/src/components/admin/ContentForms";
 
 type Row = Business & { is_approved?: boolean };
 type Filter = "all" | "pending" | "featured";
@@ -101,6 +102,8 @@ export default function BusinessesAdmin() {
               placeholder="Search name, city, address…"
               width={250}
             />
+
+      <AddPlaceForm onCreated={load} />
             <View style={styles.filters}>
               {(["all", "pending", "featured"] as Filter[]).map((f) => (
                 <Pressable

@@ -24,3 +24,12 @@ tests/
 .gitignore
 *.md
 deploy/
+
+# NOTE: web/console_dist/ is deliberately NOT excluded. It is the admin
+# console's web build, gitignored because it is generated, and it has to reach
+# the image for /admin to serve anything.
+#
+# That only works because this file exists. With no .gcloudignore, gcloud
+# synthesises one from .gitignore — which would exclude console_dist and
+# deploy an API whose /admin returns the "not built" page, with nothing in the
+# build log to say why. Do not delete this file.

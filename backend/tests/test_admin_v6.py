@@ -349,16 +349,51 @@ class TestBanners:
 # Reels moderation
 # ============================================================================
 class TestReelsModeration:
-    def test_admin_list_and_toggle_visibility(self, admin_ctx):
-        # get any visible reel
-        r = requests.get(f"{BASE_URL}/api/admin/reels?hidden=false", headers=admin_ctx["H"], timeout=15)
+    """Each test owns the reel it toggles.
+
+    This used to take reels[0] from the admin listing — an arbitrary reel it
+    did not create — and assert that it was publicly visible. That holds only
+    while nothing else is adding or removing reels, which stopped being true
+    once the admin console could publish them: a reel created and then cleaned
+    up by another test could be the newest one here and disappear between the
+    admin fetch and the public fetch. Owning the reel makes the test
+    deterministic whatever else is running.
+    """
+
+    @pytest.fixture
+    def reel_id(self, admin_ctx):
+        async def _mk():
+            db = _mongo()
+            rid = f"reel_TESTv6_{WORKER}_{uuid.uuid4().hex[:6]}"
+            await db.reels.insert_one({
+                "reel_id": rid,
+                "caption": "TEST reel v6 moderation",
+                "video_url": "https://x.com/v.mp4",
+                "cover_image": "https://x.com/c.jpg",
+                "city": "goa",
+                "author": "TEST",
+                "likes": 0,
+                "views": 0,
+                "is_hidden": False,
+                "created_at": datetime.now(timezone.utc),
+            })
+            return rid
+
+        rid = _run(_mk())
+        yield rid
+        _run(_mongo().reels.delete_many({"reel_id": rid}))
+
+    def test_admin_list_and_toggle_visibility(self, admin_ctx, reel_id):
+        # the admin listing includes it
+        r = requests.get(
+            f"{BASE_URL}/api/admin/reels?hidden=false",
+            headers=admin_ctx["H"], timeout=15,
+        )
         assert r.status_code == 200
-        reels = r.json()
-        assert isinstance(reels, list) and len(reels) > 0, "expected seeded reels"
-        reel_id = reels[0]["reel_id"]
+        assert isinstance(r.json(), list)
 
         # public list currently includes it
-        pub = requests.get(f"{BASE_URL}/api/reels?limit=100", timeout=15).json()
+        pub = requests.get(f"{BASE_URL}/api/reels?city=goa&limit=100", timeout=15).json()
         assert reel_id in {x["reel_id"] for x in pub}
 
         # toggle → hidden

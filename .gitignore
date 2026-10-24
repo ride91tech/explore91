@@ -94,3 +94,6 @@ credentials.json
 # untracked in the repo root waiting to be committed by a stray `git add -A`.
 *.apk
 *.aab
+
+# Built admin console, copied in before a deploy.
+backend/web/console_dist/

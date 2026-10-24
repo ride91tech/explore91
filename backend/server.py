@@ -12,6 +12,7 @@ from routes import (
     tickets,
 )
 from seed.seed import ensure_indexes, seed_data
+from web import console as web_console
 from web import pages as web_pages
 
 logging.basicConfig(
@@ -52,6 +53,12 @@ app.include_router(api)
 # /sitemap.xml, /robots.txt. Registered after the API router so nothing here
 # can shadow an /api path.
 app.include_router(web_pages.router)
+
+# The admin console's web build, when one has been bundled. Declared after the
+# public pages so its /admin routes cannot shadow them, and mounted on the
+# same origin as the API so it needs no CORS allowance.
+app.include_router(web_console.router)
+web_console.mount(app)
 
 app.add_middleware(
     CORSMiddleware,

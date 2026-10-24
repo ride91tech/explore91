@@ -9,6 +9,7 @@ import {
   SearchInput, Pagination, ResultCount, Loading,
 } from "@/src/components/admin/ui";
 import { useAsyncAction } from "@/src/components/admin/feedback";
+import { AddReelForm } from "@/src/components/admin/ContentForms";
 
 type ReelRow = ReelT & { is_hidden?: boolean };
 type Filter = "all" | "visible" | "hidden";
@@ -88,6 +89,8 @@ export default function ReelsAdmin() {
               placeholder="Search caption, business…"
               width={240}
             />
+
+      <AddReelForm onCreated={load} />
             <View style={styles.filters}>
               {(["all", "visible", "hidden"] as Filter[]).map((f) => (
                 <Pressable
