@@ -1,7 +1,9 @@
 # Hosting the web app on Vercel at explore91.com
 
-**Status:** configured, not deployed. The DNS and the Vercel account steps are
-not things this repo can do for you — see §4.
+**Status:** deployed and live at **https://explore91.vercel.app**, under the
+Vercel team `tech91`, project `explore91`. Everything works except the custom
+domain: one DNS record at GoDaddy is the only remaining step, and it is yours
+to throw because it takes the current site down (see §6).
 
 ---
 
@@ -73,30 +75,39 @@ have no rate limiting at all, so the extra hop costs nothing there.
 Everything below needs your Vercel account or your registrar. Nothing in the
 repo can do it.
 
-### 4.1 First deploy
+### 4.1 Deploying a new version
+
+Done. The CLI is authorized on this machine and the project exists. To ship a
+change:
 
 ```bash
 cd frontend
-npx vercel login
-npx vercel --prod
-```
-
-Vercel reads `frontend/vercel.json`, runs `npm run build:web`, and publishes
-`dist/`. The build takes several minutes — Metro is slow. **If it fails or times
-out on Vercel's builders**, build locally and ship the output instead:
-
-```bash
 npm run build:web
 npx vercel deploy dist --prod
 ```
 
-### 4.2 Point the domain
+`build:web` refuses to finish if the API base did not reach the bundle, and
+writes `dist/.vercelignore` so the font assets are uploaded. Both guards exist
+because their absence shipped a broken site once already — see §6.
 
-In the Vercel dashboard, add `explore91.com` to the project, then set the DNS
-records Vercel shows you at your registrar. The domain currently resolves to
-`185.158.133.1` behind Cloudflare, serving the Lovable prototype — **those
-records are what you are replacing, and the prototype goes offline when you
-do.** Move it to a subdomain first if you want to keep it.
+### 4.2 Point the domain — the one step left
+
+`explore91.com` is already attached to the project; it reads "Invalid
+Configuration" only because DNS still points elsewhere. Nameservers are
+GoDaddy's (`ns35`/`ns36.domaincontrol.com`) and the apex A record resolves to
+`185.158.133.1`, the Lovable prototype.
+
+At GoDaddy, change the apex A record:
+
+| Type | Name | Value |
+|---|---|---|
+| A | @ | `216.198.79.1` |
+
+Vercel's newer range; the legacy `76.76.21.21` still works.
+
+**The Lovable prototype goes offline the moment that record changes**, because
+it is what that record currently points at. Give it a subdomain first if you
+want to keep it.
 
 ### 4.3 Two backend settings that must change with it
 
@@ -149,3 +160,36 @@ That risk was accepted while the only way in was an unguessable `run.app`
 hostname. `explore91.com` is the first thing anyone would try. Close it — or at
 minimum drop `ADMIN_EMAILS` so the bypass cannot reach the console — before the
 DNS change, not after.
+
+---
+
+## 6. Three faults this deployment uncovered
+
+All three produced a 200 and a page that loaded, which is why none of them
+showed up until the site was actually served and read in a browser.
+
+**The API base was blank.** `build-console.mjs` sets
+`EXPO_PUBLIC_BACKEND_URL` to `""` so the console can make same-origin relative
+requests; `build-web.mjs` sets the absolute Cloud Run URL. Neither passed
+`--clear`, and babel-preset-expo inlines each `EXPO_PUBLIC_*` read at
+transform time without that value reliably reaching Metro's transform cache
+key. Whichever script ran first decided what `src/api.ts` carried, and every
+later build got a cache hit that reproduced it byte for byte — identical
+bundle hash, no warning. The deployed app requested relative `/api/...`, the
+SPA rewrite answered with `index.html`, and every screen rendered empty.
+Both scripts now pass `--clear` and export to separate directories.
+
+**The fonts were never uploaded.** The Vercel CLI ignores any path containing
+a `node_modules` segment, and Expo exports fonts to
+`dist/assets/node_modules/...`. On a prebuilt upload all seven were dropped,
+and each `.ttf` fell through to the SPA rewrite and came back as `index.html`
+with a 200. `document.fonts` reported `status: "error"` for every face and the
+app drew every icon as a tofu box, silently. `build-web.mjs` now writes
+`dist/.vercelignore` containing `!node_modules`. That file belongs in `dist/`
+and never in `frontend/`, where it would upload the real `node_modules`.
+
+**Nothing checked that any of it worked.** Verifying that the API URL was
+"present in the bundle" is what hid the first fault: `EXPO_PUBLIC_SITE_URL`
+holds the same string, so a single occurrence looked like success when it was
+`src/links.ts` alone. `build-web.mjs` now counts occurrences against the
+number of modules that read the variable and fails the build on a shortfall.
