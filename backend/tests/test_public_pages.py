@@ -264,29 +264,34 @@ class TestReelSlugDenormalisation:
         )
         assert page.status_code == 200, "a shared reel would 404"
 
-    def test_unapproved_place_has_no_public_page(self):
-        """An unapproved business must not be publicly addressable.
+    def test_every_reel_in_the_feed_points_at_a_listed_place(self):
+        """A reel must never outlive the listing it links to.
 
-        Note the asymmetry this documents: the public reels feed filters only
-        on is_hidden, so a reel of an unapproved business is visible in the
-        app while its place page is not. The page behaving this way is right;
-        the feed is the side worth revisiting.
+        This replaces a test that documented the opposite. The feed used to
+        filter on is_hidden alone, so a reel of an unapproved place stayed in
+        the app while the page it linked to returned 404 — and that test went
+        looking for exactly such a reel to assert the 404. The feed now
+        excludes them, so there is nothing to find, and the invariant worth
+        asserting is the absence.
+
+        The old version also compared two separate reads of shared state and
+        raced whenever something unapproved a place between them. This reads
+        the feed once and follows each link, so a concurrent change can only
+        make it fetch a page that is genuinely reachable.
+
+        The reverse direction — unapproving a place pulls its reels — is
+        covered with owned data in test_admin_content.
         """
-        listed = {
-            b["business_id"]
-            for b in requests.get(
-                f"{BASE_URL}/api/businesses",
-                params={"city": "goa", "limit": 100}, timeout=30,
-            ).json()
-        }
         reels = requests.get(
             f"{BASE_URL}/api/reels", params={"city": "goa", "limit": 20}, timeout=30
         ).json()
-        hidden = [
-            x for x in reels
-            if x.get("business_slug") and x.get("business_id") not in listed
-        ]
-        if not hidden:
-            pytest.skip("no reels on unlisted places right now")
-        r = requests.get(f"{BASE_URL}/place/{hidden[0]['business_slug']}", timeout=20)
-        assert r.status_code == 404
+        linked = [x for x in reels if x.get("business_slug")]
+        if not linked:
+            pytest.skip("no reels on listed places right now")
+
+        broken = []
+        for reel in linked[:5]:
+            page = requests.get(f"{BASE_URL}/place/{reel['business_slug']}", timeout=20)
+            if page.status_code != 200:
+                broken.append((reel["business_slug"], page.status_code))
+        assert not broken, f"reels in the feed link to dead pages: {broken}"

@@ -20,6 +20,7 @@ from models import (
     AdminReelUpdate,
     BannerUpdate,
     BannerUpsert,
+    CategoryToggle,
     CategoryUpsert,
     CityUpsert,
     FraudFlagCreate,
@@ -484,12 +485,35 @@ async def admin_delete_reel(reel_id: str, current=Depends(get_current_user)):
 # --- Categories CMS -----------------------------------------------------
 @router.get("/admin/categories")
 async def admin_list_categories(current=Depends(get_current_user)):
+    """Every category, enabled or not, with how many places each one holds.
+
+    The count is the thing an admin needs before disabling one: taking down a
+    category with two hundred places behind it hides a filter those places
+    were being found through, and the console should not make that decision
+    look free.
+    """
     require_role(current, "admin")
     custom = await db.categories_cms.find({}, {"_id": 0}).to_list(200)
     known = {c["slug"] for c in custom}
     merged = [{**c, "source": "default"} for c in CATEGORIES if c["slug"] not in known]
     merged += [{**c, "source": "cms"} for c in custom]
-    return merged
+
+    # One grouped aggregation rather than a count per category.
+    counts = {
+        row["_id"]: row["n"]
+        async for row in db.businesses.aggregate([
+            {"$match": {"is_approved": {"$ne": False}}},
+            {"$group": {"_id": "$category", "n": {"$sum": 1}}},
+        ])
+    }
+    return [
+        {
+            **c,
+            "is_active": c.get("is_active", True),
+            "business_count": int(counts.get(c["slug"], 0)),
+        }
+        for c in merged
+    ]
 
 
 @router.post("/admin/categories")
@@ -506,6 +530,64 @@ async def admin_create_category(
     await db.categories_cms.insert_one(dict(doc))
     await audit.record(current, "category.create", "category", payload.slug, after=doc)
     return doc
+
+
+@router.patch("/admin/categories/{slug}")
+async def admin_toggle_category(
+    slug: str, payload: CategoryToggle, current=Depends(get_current_user)
+):
+    """Enable or disable a category.
+
+    A built-in has no database row to patch — the twenty-four live in code. So
+    disabling one writes an override into categories_cms carrying the built-in's
+    own name and icon plus the flag, which the merge in GET /categories already
+    knows how to apply. Re-enabling a built-in deletes that override rather than
+    setting the flag back, so the category returns to being defined in one place
+    instead of leaving a redundant copy behind to drift.
+    """
+    require_role(current, "admin")
+
+    existing = await db.categories_cms.find_one({"slug": slug}, {"_id": 0})
+    builtin = next((c for c in CATEGORIES if c["slug"] == slug), None)
+    if not existing and not builtin:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    before = existing or {**builtin, "is_active": True}
+
+    if payload.is_active and builtin and existing and not existing.get("is_active", True):
+        # Re-enabling a built-in: drop the override it was disabled with, but
+        # only if that override exists purely to carry the flag. One that also
+        # renamed or re-iconed the category is a real customisation and stays.
+        same_shape = (
+            existing.get("name") == builtin["name"]
+            and existing.get("icon") == builtin["icon"]
+        )
+        if same_shape:
+            await db.categories_cms.delete_one({"slug": slug})
+            await audit.record(
+                current, "category.enable", "category", slug,
+                before=before, after={**builtin, "is_active": True},
+                note="override removed; back to the built-in definition",
+            )
+            return {**builtin, "is_active": True, "source": "default"}
+
+    if existing:
+        await db.categories_cms.update_one(
+            {"slug": slug}, {"$set": {"is_active": payload.is_active}}
+        )
+        after = await db.categories_cms.find_one({"slug": slug}, {"_id": 0})
+    else:
+        # First time a built-in is touched: materialise it as an override.
+        after = {**builtin, "is_active": payload.is_active}
+        await db.categories_cms.insert_one(dict(after))
+        after.pop("_id", None)
+
+    await audit.record(
+        current,
+        "category.enable" if payload.is_active else "category.disable",
+        "category", slug, before=before, after=after,
+    )
+    return {**after, "source": "cms"}
 
 
 @router.delete("/admin/categories/{slug}")

@@ -99,9 +99,22 @@ async def get_cities_grouped():
 
 @router.get("/categories")
 async def get_categories():
+    """Categories the app should offer as filters.
+
+    categories_cms is an override layer: a row with the same slug as a
+    built-in replaces it. That is what lets a built-in be disabled at all —
+    the twenty-four in code cannot be edited, so disabling one writes an
+    override carrying is_active=False.
+
+    Disabled categories are withheld here but the places tagged with them are
+    untouched: they stop being reachable by that filter and still appear
+    under "All". Disabling is about the taxonomy, not the content.
+    """
     custom = await db.categories_cms.find({}, {"_id": 0}).to_list(200)
     known = {c["slug"] for c in custom}
-    return [c for c in CATEGORIES if c["slug"] not in known] + custom
+    merged = [c for c in CATEGORIES if c["slug"] not in known] + custom
+    # Absent is_active means active — built-ins carry no flag at all.
+    return [c for c in merged if c.get("is_active", True)]
 
 
 @router.get("/businesses")

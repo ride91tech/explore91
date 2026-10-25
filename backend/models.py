@@ -309,6 +309,19 @@ class CategoryUpsert(BaseModel):
     slug: str = Field(pattern="^[a-z0-9-]{2,32}$")
     name: str = Field(min_length=1, max_length=48)
     icon: str = Field(min_length=1, max_length=48)
+    is_active: bool = True
+
+
+class CategoryToggle(BaseModel):
+    """Enable or disable a category.
+
+    Disabling takes the category out of the app's filters without touching the
+    places tagged with it. Deleting was the only control before, and it refuses
+    outright on the twenty-four built-in categories — so a seasonal or mistaken
+    category could never be taken down, only added to.
+    """
+
+    is_active: bool
 
 
 class CityUpsert(BaseModel):
