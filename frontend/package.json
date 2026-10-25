@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "build:console": "node scripts/build-console.mjs"
+    "build:console": "node scripts/build-console.mjs",
+    "build:web": "node scripts/build-web.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/figtree": "0.4.1",
