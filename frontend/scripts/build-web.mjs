@@ -18,9 +18,32 @@ import { fileURLToPath } from "node:url";
 const frontend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(frontend, "dist");
 
-const api = process.env.EXPO_PUBLIC_BACKEND_URL
-  || "https://explore91-api-597388632883.asia-south1.run.app";
-const site = process.env.EXPO_PUBLIC_SITE_URL || api;
+// .env is read by the Expo CLI, not by node, so process.env does not carry it
+// in this script. Because the script then passes both values explicitly to the
+// export, a hardcoded fallback here silently OVERRIDES whatever .env says -
+// editing .env looks like it works and changes nothing. Read it so the
+// precedence is: real environment > .env > fallback.
+const readDotEnv = () => {
+  const f = join(frontend, ".env");
+  if (!existsSync(f)) return {};
+  const vars = {};
+  for (const raw of readFileSync(f, "utf8").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq < 1) continue;
+    vars[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+  }
+  return vars;
+};
+const dotenv = readDotEnv();
+const pick = (k, fallback) => process.env[k] || dotenv[k] || fallback;
+
+const api = pick(
+  "EXPO_PUBLIC_BACKEND_URL",
+  "https://explore91-api-597388632883.asia-south1.run.app"
+);
+const site = pick("EXPO_PUBLIC_SITE_URL", api);
 
 console.log(`API:  ${api}`);
 console.log(`Site: ${site}`);
@@ -82,7 +105,7 @@ if (count(api) < wanted || count(site) < 1) {
 // with index.html and a 200 - fonts failing to parse, every icon a tofu box,
 // nothing in the console. This un-ignores them. It belongs in dist/, never in
 // frontend/, where it would upload the real node_modules on a source deploy.
-writeFileSync(join(out, ".vercelignore"), "!node_modules
-");
+writeFileSync(join(out, ".vercelignore"), `!node_modules
+`);
 
 console.log(`Built to dist/ (API base present ${count(api)}x)`);

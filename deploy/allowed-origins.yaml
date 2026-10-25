@@ -1,0 +1,22 @@
+# Browser origins allowed to call the API.
+#
+# Run from the repo root:
+#   gcloud.cmd run services update explore91-api --project explore91 \
+#     --region asia-south1 --flags-file=deploy/allowed-origins.yaml
+#
+# A flags-file is required rather than a bare --update-env-vars: the value
+# contains commas, and gcloud parses those as separators between env vars, so
+# the bare form fails. On Windows gcloud.cmd eats them even inside quotes.
+#
+# Starlette matches these as exact strings, so scheme and host must match what
+# the browser sends. Native apps send no Origin header and are unaffected; the
+# admin console is served from the API's own origin, so it needs no entry.
+#
+# Setting this also flips allow_credentials to True (backend/server.py). That
+# is correct here - auth is a bearer token, not a cookie.
+#
+# Not listed, deliberately: Vercel preview deployments get a fresh hostname
+# each time, so a preview build of the web app cannot call this API. Add the
+# specific preview origin temporarily if you ever need one to work.
+--update-env-vars:
+  ALLOWED_ORIGINS: https://explore91.com,https://www.explore91.com,https://explore91.vercel.app
