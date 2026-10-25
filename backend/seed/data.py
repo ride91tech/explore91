@@ -12,7 +12,7 @@ CITIES = [
      "tagline": "Heritage meets modern",
      "image": "https://images.unsplash.com/photo-1687840430404-b82859282de4?w=1200&q=85"},
     {"slug": "pune", "name": "Pune", "state": "Maharashtra", "region": "Maharashtra",
-     "tagline": "The city that never sleeps",
+     "tagline": "Old quarters, young nights",
      "image": "https://images.unsplash.com/photo-1553064483-f10fe837615f?w=1200&q=85"},
     {"slug": "jaipur", "name": "Jaipur", "state": "Rajasthan", "region": "Rajasthan",
      "tagline": "The pink city, in full colour",

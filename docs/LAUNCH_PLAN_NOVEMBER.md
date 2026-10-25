@@ -32,9 +32,13 @@ measurement, not an impression. Taken from the production API today:
 | Pune | 26 | **0** | Places only. The Reels tab is empty |
 | **Mumbai** | **0** | **0** | Entirely empty. A decided launch city |
 
-Seven further cities — Jaipur, Udaipur, Varanasi, Leh, Kochi, Shillong and
-Delhi — are offered in the city picker with **zero places and zero reels each**.
-A user who picks Delhi today gets a working app with nothing in it.
+Eight further cities — Mumbai, Jaipur, Udaipur, Varanasi, Leh, Kochi,
+Shillong and Delhi — have zero places and zero reels. **The app already handles
+this correctly**: `/cities/grouped` returns `is_live` per city and the picker
+sorts anything empty into a separate "Coming soon" list, so none of them is
+openable. Verified against production today. This was listed as a launch task
+in an earlier draft of this plan; it was already solved, and the task is
+removed.
 
 ---
 
@@ -49,6 +53,10 @@ second-most-complete city we have, and Mumbai has nothing. Taking a city from
 zero to launch quality is weeks of non-engineering work with a long tail, and
 there is no version of that which lands by 17 November alongside everything
 else.
+
+Dropping Mumbai costs less than it sounds. It is already in the picker's
+"Coming soon" list and cannot be opened, so this is a decision not to *promote*
+it in November rather than a feature being pulled.
 
 Pune is the closer call. It has the places but no reels, and reels are the core
 mechanic — a city whose Reels tab is empty is a worse first impression than a
@@ -117,9 +125,8 @@ the real database to anyone who finds explore91.com/admin.
 - Pune: 15–20 reels, or it ships in December.
 - Goa and Ahmedabad: review what is there rather than add to it. 28 and 26
   places is enough; the quality of the top 10 in each matters more than the 29th.
-- **Hide the seven empty cities before launch.** Small engineering task (§C) but
-  a content decision — the alternative is a user picking Delhi and finding
-  nothing.
+- Mumbai and the other empty cities need no action: they already sit in the
+  picker's "Coming soon" list and cannot be opened.
 
 ### Workstream C — Pre-launch engineering *(parallel, small)*
 
@@ -128,7 +135,6 @@ Each is hours rather than days, and each is a real exposure.
 | | Why it blocks launch |
 |---|---|
 | **Fix `eas.json`** | `preview` and `production` builds point `EXPO_PUBLIC_BACKEND_URL` at `https://explore91-backend.onrender.com`, which returns **404**. Any EAS build — which is how you ship to Play — targets a dead backend. The locally-built APK is unaffected because it reads `frontend/.env`, which is why this has gone unnoticed |
-| **Hide empty cities** | Seven cities in the picker with no content. Cities are built-in and read-only in the admin console, so this needs a code change or extending the console the way categories were |
 | **Set `ALLOWED_ORIGINS`** | `deploy/allowed-origins.yaml` is written and committed, not applied. CORS is open to every origin |
 | **Rotate the Atlas credential** | Pasted into a chat several sessions ago, never rotated. Overdue independently of launch |
 | **Delete `smoke-check@explore91.dev`** | A real user record left in production by deploy smoke tests |
@@ -155,7 +161,7 @@ Not started, and review time is outside our control.
 | Week | A — OTP | B — Content | C — Engineering | D — Play |
 |---|---|---|---|---|
 | **26 Oct – 1 Nov** | **Start DLT.** Price email/WhatsApp fallback | Pune reel sourcing begins | `eas.json`, `ALLOWED_ORIGINS`, Atlas rotation | Draft listing, privacy policy |
-| **2 – 8 Nov** | Build 0.1b–0.1d against a stub | Pune reels continue | Hide empty cities; delete smoke-check user | Data-safety form, screenshots |
+| **2 – 8 Nov** | Build 0.1b–0.1d against a stub | Pune reels continue | Delete smoke-check user; fix Pune tagline | Data-safety form, screenshots |
 | **9 – 15 Nov** | DLT live, real sends, then 0.1e | Goa/Ahmedabad top-10 review | Rebuild APK; staging if feasible | Internal testing track |
 | **16 – 22 Nov** | Harden, rate-limit review, soak | **Pune go/no-go on evidence** | Freeze | **Submit for review by the 17th** |
 | **23 – 29 Nov** | — | — | — | **Launch Tue 24 Nov** |
@@ -171,8 +177,9 @@ rather than lowering the bar.
 2. `POST /api/auth/dev` returns **404** in production and `dev_` sessions are
    purged.
 3. `ALLOWED_ORIGINS` is set; the Atlas credential is rotated.
-4. The city picker offers only cities with content.
-5. Every launch city has both places **and** reels.
+4. Every launch city has both places **and** reels. (The picker already hides
+   empty cities behind "Coming soon" — verified, not a task.)
+5. No duplicate or placeholder copy in the launch cities' taglines.
 6. An EAS production build points at Cloud Run and is on the internal track.
 7. Deep links open the app from a link shared out of the app itself.
 8. The backend suite passes — 284 tests at last run.

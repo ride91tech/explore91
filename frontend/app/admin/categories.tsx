@@ -172,6 +172,5 @@ const styles = StyleSheet.create({
   slug: { fontFamily: "monospace", fontSize: tType.sm, color: colors.onSurface },
   dimmed: { color: colors.onSurfaceTertiary },
   count: { fontFamily: fonts.bodySemi, color: colors.onSurfaceSecondary },
-  readonly: { fontSize: tType.sm, color: colors.onSurfaceTertiary, fontStyle: "italic" },
   err: { color: colors.error, marginTop: 12, fontSize: tType.sm },
 });

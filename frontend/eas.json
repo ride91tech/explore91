@@ -8,7 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "http://localhost:8000"
+        "EXPO_PUBLIC_BACKEND_URL": "http://localhost:8000",
+        "EXPO_PUBLIC_SITE_URL": "https://explore91.com"
       }
     },
     "preview": {
@@ -17,13 +18,15 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://explore91-backend.onrender.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://explore91-api-597388632883.asia-south1.run.app",
+        "EXPO_PUBLIC_SITE_URL": "https://explore91.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://explore91-backend.onrender.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://explore91-api-597388632883.asia-south1.run.app",
+        "EXPO_PUBLIC_SITE_URL": "https://explore91.com"
       }
     }
   },
