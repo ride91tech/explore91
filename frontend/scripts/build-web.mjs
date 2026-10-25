@@ -11,7 +11,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,10 +29,16 @@ rmSync(out, { recursive: true, force: true });
 
 // Through node, not the npx shim: Node 24 on Windows will not spawn a .cmd
 // without a shell, and a shell would mean quoting paths containing spaces.
+// --clear is not optional here. babel-preset-expo inlines each
+// EXPO_PUBLIC_* read at transform time, but the value does not reliably
+// reach Metro's transform cache key. The console build and this one set
+// EXPO_PUBLIC_BACKEND_URL to opposite values, so without clearing, whichever
+// ran first decides what src/api.ts carries - and a cache hit reproduces it
+// byte for byte, identical bundle hash and all.
 const expoCli = createRequire(import.meta.url).resolve("expo/bin/cli");
 execFileSync(
   process.execPath,
-  [expoCli, "export", "--platform", "web", "--output-dir", "dist"],
+  [expoCli, "export", "--platform", "web", "--clear", "--output-dir", "dist"],
   {
     cwd: frontend,
     stdio: "inherit",
@@ -44,4 +50,39 @@ if (!existsSync(join(out, "index.html"))) {
   console.error("Export produced no index.html.");
   process.exit(1);
 }
-console.log("Built to dist/");
+
+// Prove the API base actually reached the bundle.
+//
+// Metro inlines each `process.env.EXPO_PUBLIC_*` read as a literal, and
+// exactly two modules read one: src/api.ts (EXPO_PUBLIC_BACKEND_URL, the API
+// base) and src/links.ts (EXPO_PUBLIC_SITE_URL, for share links). So when the
+// two values are equal the origin must appear at least twice. Finding it once
+// means one of them was blank — and a blank API base is silent: every request
+// becomes a relative /api/..., which the SPA rewrite answers with index.html
+// and a 200, so the app loads and simply shows no content.
+const jsDir = join(out, "_expo", "static", "js", "web");
+const bundles = readdirSync(jsDir).filter((f) => f.endsWith(".js"));
+const js = bundles.map((f) => readFileSync(join(jsDir, f), "utf8")).join("");
+const count = (needle) => js.split(needle).length - 1;
+
+const wanted = site === api ? 2 : 1;
+if (count(api) < wanted || count(site) < 1) {
+  console.error(
+    `Bundle does not carry the expected URLs: ${api} appears ${count(api)}x ` +
+    `(wanted >= ${wanted}), ${site} appears ${count(site)}x (wanted >= 1).
+` +
+    "The API base is probably blank. Check EXPO_PUBLIC_BACKEND_URL."
+  );
+  process.exit(1);
+}
+
+// The Vercel CLI ignores every path containing a node_modules segment, and
+// Expo exports font assets to dist/assets/node_modules/... So on a prebuilt
+// upload all seven fonts were dropped, and the SPA rewrite answered each .ttf
+// with index.html and a 200 - fonts failing to parse, every icon a tofu box,
+// nothing in the console. This un-ignores them. It belongs in dist/, never in
+// frontend/, where it would upload the real node_modules on a source deploy.
+writeFileSync(join(out, ".vercelignore"), "!node_modules
+");
+
+console.log(`Built to dist/ (API base present ${count(api)}x)`);
