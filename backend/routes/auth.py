@@ -22,10 +22,13 @@ from core.config import (
     APPLE_AUDIENCES,
     APPLE_ISSUER,
     APPLE_JWKS_URL,
+    CONSENT_PURPOSES,
+    PRIVACY_NOTICE_VERSION,
     SESSION_TTL_DAYS,
     dev_auth_enabled,
 )
 from core.db import db
+from core.erasure import erase_user
 from core.security import (
     client_key,
     get_current_user,
@@ -193,7 +196,10 @@ async def dev_sign_in(request: Request):
 
     # Audit trail. If this ever appears in a production log, the gate was set
     # on a service where it should not have been.
-    logger.warning("DEV SIGN-IN: issuing a session for %s, no credential checked", email)
+    # The address is deliberately not logged. Cloud Run retains these logs
+    # under Google's policy, not ours, so an email here is personal data
+    # sitting outside every retention rule we control.
+    logger.warning("DEV SIGN-IN: issuing a session, no credential checked")
 
     # The prefix makes these identifiable in user_sessions, so they can be
     # found and purged when real sign-in lands.
@@ -220,6 +226,16 @@ async def dev_sign_in(request: Request):
             "home_city": "Goa",
             "roles": ["customer"],
             "created_at": now,
+            # DPDP s6 wants consent that is informed and recorded, not
+            # inferred. We store which notice the user was shown and when,
+            # so "they agreed" is answerable with a version and a timestamp
+            # rather than an assurance.
+            "consent": {
+                "notice_version": PRIVACY_NOTICE_VERSION,
+                "granted_at": now,
+                "purposes": list(CONSENT_PURPOSES),
+            },
+            "is_adult_confirmed": bool(getattr(payload, "is_adult", False)),
         }
         await db.users.insert_one(dict(user_doc))
         user_doc.pop("_id", None)
@@ -321,6 +337,23 @@ async def logout(request: Request, current=Depends(get_current_user)):
     if deleted.deleted_count == 0:
         await db.user_sessions.delete_one({"session_token": token})
     return {"ok": True}
+
+
+@router.delete("/auth/me")
+async def delete_me(request: Request, current=Depends(get_current_user)):
+    """Erase this account and everything keyed to it.
+
+    DPDP s12(3) and Google Play both require this, and Play requires it be
+    reachable in-app rather than by email request. It is irreversible by
+    design: a restorable "deleted" account is not erasure.
+
+    Rate-limited because it is destructive and unauthenticated callers
+    should not be able to probe it, and because a stolen session should not
+    be able to loop it.
+    """
+    await rate_limit("erase", client_key(request, current), limit=3, window_sec=3600)
+    report = await erase_user(current["user_id"])
+    return {"erased": True, "collections": report}
 
 
 @router.patch("/auth/me")

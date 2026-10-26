@@ -15,7 +15,8 @@ import { api, setToken, loadToken, UserT } from "@/src/api";
 type Ctx = {
   user: UserT | null;
   loading: boolean;
-  signIn: (email: string, name?: string) => Promise<void>;
+  signIn: (email: string, name?: string, isAdult?: boolean) => Promise<void>;
+  deleteAccount: () => Promise<void>;
   signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -25,6 +26,7 @@ const AuthCtx = createContext<Ctx>({
   user: null,
   loading: true,
   signIn: async () => {},
+  deleteAccount: async () => {},
   signInWithApple: async () => {},
   signOut: async () => {},
   refresh: async () => {},
@@ -61,13 +63,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { mounted = false; };
   }, [refresh]);
 
-  const signIn = useCallback(async (email: string, name?: string) => {
+  const signIn = useCallback(async (email: string, name?: string, isAdult = false) => {
+    // is_adult is recorded against the account, not just checked in the UI.
+    // DPDP s9 bars processing a child's data without verifiable parental
+    // consent, and a box ticked on a screen we never store is unanswerable
+    // later.
     const res = await api<{ session_token: string; user: UserT }>("/auth/dev", {
       method: "POST",
-      body: JSON.stringify({ email, name: name ?? null }),
+      body: JSON.stringify({ email, name: name ?? null, is_adult: isAdult }),
     });
     await setToken(res.session_token);
     setUser(res.user);
+  }, []);
+
+  /** Erase the account. Irreversible, and the caller is expected to have
+   *  confirmed with the user first — this does not ask. */
+  const deleteAccount = useCallback(async () => {
+    await api("/auth/me", { method: "DELETE", auth: true });
+    await setToken(null);
+    setUser(null);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -110,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signInWithApple, signOut, refresh }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signInWithApple, signOut, refresh, deleteAccount }}>
       {children}
     </AuthCtx.Provider>
   );

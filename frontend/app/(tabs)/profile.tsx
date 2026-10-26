@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -38,7 +39,8 @@ import type { IconName } from "@/src/icons";
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, signOut, refresh } = useAuth();
+  const { user, signOut, refresh, deleteAccount } = useAuth();
+  const [erasing, setErasing] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [saved, setSaved] = useState<Business[]>([]);
   const [journey, setJourney] = useState<JourneyT | null>(null);
@@ -244,6 +246,54 @@ export default function Profile() {
         <Pressable testID="logout-button" onPress={signOut} style={styles.logout}>
           <Ionicons name="log-out-outline" size={17} color={colors.error} />
           <Text style={styles.logoutText}>Sign out</Text>
+        </Pressable>
+
+        <Pressable
+          testID="privacy-link"
+          onPress={() => router.push("/privacy")}
+          style={styles.quietRow}
+        >
+          <Text style={styles.quietText}>Privacy notice</Text>
+        </Pressable>
+
+        {/* Erasure has to be reachable in the app, not by emailing support:
+            DPDP s12(3) is a right the user exercises, and Google Play
+            requires in-app account deletion for anything that lets you make
+            an account. The confirm spells out what survives, because
+            "deleted" that silently keeps your reviews is a lie. */}
+        <Pressable
+          testID="delete-account"
+          disabled={erasing}
+          onPress={() =>
+            Alert.alert(
+              "Delete your account?",
+              "This cannot be undone.\n\nYour account, saved places, likes, "
+                + "visits and support tickets are deleted. Reviews and bookings "
+                + "stay with the business but stop being linked to you.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: async () => {
+                    setErasing(true);
+                    try {
+                      await deleteAccount();
+                      router.replace("/login");
+                    } catch {
+                      setErasing(false);
+                      Alert.alert("Could not delete", "Please try again.");
+                    }
+                  },
+                },
+              ],
+            )
+          }
+          style={styles.quietRow}
+        >
+          <Text style={[styles.quietText, styles.danger]}>
+            {erasing ? "Deleting…" : "Delete my account"}
+          </Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -454,6 +504,9 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
 
+  quietRow: { marginTop: spacing.lg, alignItems: "center", paddingVertical: spacing.sm },
+  quietText: { fontFamily: fonts.body, fontSize: tType.sm, color: colors.onSurfaceTertiary },
+  danger: { color: colors.error },
   logout: {
     marginTop: spacing.xl,
     height: 50,

@@ -57,6 +57,26 @@ ALLOWED_ORIGINS = [
 ] or ["*"]
 
 
+# --- Privacy / consent ------------------------------------------------------
+# Bump PRIVACY_NOTICE_VERSION whenever the notice changes materially. Consent
+# is recorded against a version so that "what did they agree to" has an
+# answer; without it, a later rewrite silently rewrites everyone's consent.
+PRIVACY_NOTICE_VERSION = "2026-10-26"
+
+# The purposes consent is collected for, in the words the notice uses. DPDP
+# s6 wants consent to be specific, so a single "I agree" to an unenumerated
+# bundle is the thing to avoid.
+CONSENT_PURPOSES = (
+    "account",       # creating and maintaining your account
+    "personalise",   # showing places and reels for your chosen city
+    "support",       # answering support tickets you raise
+)
+
+PRIVACY_CONTACT_EMAIL = os.environ.get(
+    "PRIVACY_CONTACT_EMAIL", "privacy@explore91.com"
+)
+
+
 # --- Deep links -----------------------------------------------------------
 # Serving /.well-known/assetlinks.json and apple-app-site-association is what
 # lets a tapped https://explore91.com/place/... open the app instead of a

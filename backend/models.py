@@ -35,6 +35,12 @@ class DevSignIn(BaseModel):
         pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
     )
     name: Optional[str] = Field(default=None, max_length=120)
+    # DPDP s9 requires verifiable parental consent for anyone under 18 and
+    # bars behavioural advertising to children. We cannot honour that without
+    # knowing, so sign-up asks. A self-declaration is not "verifiable" in the
+    # Act's sense - it is the floor, not the ceiling - but it is the
+    # difference between a policy we can apply and one we cannot.
+    is_adult: bool = False
 
     @field_validator("email", "name", mode="before")
     @classmethod

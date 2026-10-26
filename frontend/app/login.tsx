@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from "react-native";
+import Ionicons from "@react-native-vector-icons/ionicons";
+import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,7 +29,9 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export default function Login() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { signIn, signInWithApple } = useAuth();
+  const [agreed, setAgreed] = useState(false);
   const { width, height } = Dimensions.get("window");
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [email, setEmail] = useState("");
@@ -40,7 +44,10 @@ export default function Login() {
     }
   }, []);
 
-  const ready = EMAIL.test(email.trim()) && !busy;
+  // Consent is a precondition, not a formality: DPDP s6 wants a clear
+  // affirmative action, which a pre-ticked box or an implied agreement in
+  // small print is not. So Continue stays disabled until it is ticked.
+  const ready = EMAIL.test(email.trim()) && agreed && !busy;
 
   const handleContinue = async () => {
     if (!ready) return;
@@ -48,7 +55,7 @@ export default function Login() {
     setBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await signIn(email.trim());
+      await signIn(email.trim(), undefined, agreed);
     } catch (e: any) {
       // The endpoint 404s unless DEV_AUTH_ENABLED is set on the server, which
       // is the case someone hitting this against production will meet — so
@@ -152,9 +159,24 @@ export default function Login() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Text style={styles.legal}>
-            By continuing you agree to Explore91's Terms & Privacy Policy.
-          </Text>
+          <Pressable
+            testID="consent-checkbox"
+            onPress={() => setAgreed((v) => !v)}
+            style={styles.consentRow}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: agreed }}
+          >
+            <View style={[styles.box, agreed && styles.boxOn]}>
+              {agreed ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+            </View>
+            <Text style={styles.legal}>
+              I am 18 or older and I agree to the{" "}
+              <Text style={styles.link} onPress={() => router.push("/privacy")}>
+                Privacy Notice
+              </Text>
+              . It explains what Explore91 collects and how to delete it.
+            </Text>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -202,5 +224,16 @@ const styles = StyleSheet.create({
   },
   appleBtn: { height: 54, width: "100%" },
   error: { color: "#FFC5C5", fontSize: 13, textAlign: "center", marginTop: spacing.md },
-  legal: { color: "rgba(255,255,255,0.6)", fontSize: 12, textAlign: "center", marginTop: spacing.lg },
+  consentRow: {
+    flexDirection: "row", alignItems: "flex-start", gap: spacing.sm,
+    marginTop: spacing.lg, paddingHorizontal: spacing.xs,
+  },
+  box: {
+    width: 20, height: 20, borderRadius: 6, borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.45)", alignItems: "center",
+    justifyContent: "center", marginTop: 1,
+  },
+  boxOn: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  legal: { flex: 1, color: "rgba(255,255,255,0.6)", fontSize: 12, lineHeight: 18 },
+  link: { color: "#fff", textDecorationLine: "underline" },
 });
