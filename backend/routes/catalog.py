@@ -5,15 +5,25 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from core.db import db
-from seed.data import CATEGORIES, CITIES
+from seed.data import CATEGORIES, CITIES, CITY_COORDS
 
 router = APIRouter()
 
 
 def _with_region(city: dict) -> dict:
-    """Cities added before the geography fields existed have neither."""
+    """Cities added before the geography fields existed have neither.
+
+    Also attaches the city's centre (lat, lng) when known, so the app can
+    choose the city nearest the device. A CMS city with no coordinates of
+    its own and no seed entry gets none, and the app skips it.
+    """
     state = city.get("state") or ""
-    return {**city, "state": state, "region": city.get("region") or state}
+    out = {**city, "state": state, "region": city.get("region") or state}
+    if out.get("lat") is None or out.get("lng") is None:
+        coords = CITY_COORDS.get(city.get("slug", ""))
+        if coords:
+            out["lat"], out["lng"] = float(coords[0]), float(coords[1])
+    return out
 
 
 async def content_counts() -> dict:
