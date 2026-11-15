@@ -538,3 +538,122 @@ class TestMsg91:
     def test_the_sender_string_splits_into_name_and_address(self, value, expected):
         import core.otp as otp
         assert otp._split_from(value) == expected
+
+
+# --------------------------------------------------------- WhatsApp (Kapso) --
+
+KAPSO_ENV = {
+    "OTP_PEPPER": PEPPER,
+    "KAPSO_API_KEY": "test-kapso-key-not-real-0123456789",
+    "KAPSO_PHONE_NUMBER_ID": "647015955153740",
+    "KAPSO_OTP_TEMPLATE": "explore91_login",
+}
+KAPSO_OK = {
+    "messaging_product": "whatsapp",
+    "contacts": [{"input": "919876543210", "wa_id": "919876543210"}],
+    "messages": [{"id": "wamid.HBgNMTU1NTE0OTU5Nzg1FQIAERgSMDhGRjdBMDEy"}],
+}
+
+
+def _kapso_env(monkeypatch, **overrides):
+    for k, v in {**KAPSO_ENV, **overrides}.items():
+        monkeypatch.setenv(k, v)
+
+
+def _mock_kapso(monkeypatch, status=200, body=None):
+    import httpx
+    import json as _json
+    import core.otp as otp
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        seen["headers"] = dict(request.headers)
+        seen["json"] = _json.loads(request.content)
+        return httpx.Response(status, json=KAPSO_OK if body is None else body)
+
+    monkeypatch.setattr(otp, "_http_client",
+                        lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    return seen
+
+
+class TestWhatsApp:
+    def test_configured_only_with_every_setting(self, monkeypatch):
+        import core.otp as otp
+        _kapso_env(monkeypatch)
+        assert otp.whatsapp_configured() is True
+        for missing in ("KAPSO_API_KEY", "KAPSO_PHONE_NUMBER_ID", "KAPSO_OTP_TEMPLATE"):
+            monkeypatch.setenv(missing, "")
+            assert otp.whatsapp_configured() is False, f"configured without {missing}"
+            monkeypatch.setenv(missing, KAPSO_ENV[missing])
+
+    def test_the_code_goes_in_both_places_meta_requires(self, monkeypatch):
+        """Authentication templates reject a send that carries the code in
+        the body but not on the copy-code button, or the reverse."""
+        import core.otp as otp
+        _kapso_env(monkeypatch)
+        seen = _mock_kapso(monkeypatch)
+        _run(otp.send_code_whatsapp("+919876543210", "482913"))
+        assert seen["url"] == ("https://api.kapso.ai/meta/whatsapp/v24.0/"
+                               "647015955153740/messages")
+        assert seen["headers"]["x-api-key"] == KAPSO_ENV["KAPSO_API_KEY"]
+        body = seen["json"]
+        assert body["to"] == "919876543210", "Meta wants digits without the +"
+        assert body["type"] == "template"
+        assert body["template"]["name"] == "explore91_login"
+        comps = {c["type"]: c for c in body["template"]["components"]}
+        assert comps["body"]["parameters"][0]["text"] == "482913"
+        assert comps["button"]["sub_type"] == "url"
+        assert comps["button"]["index"] == "0"
+        assert comps["button"]["parameters"][0]["text"] == "482913"
+
+    def test_a_meta_error_is_a_failure(self, monkeypatch):
+        import core.otp as otp
+        _kapso_env(monkeypatch)
+        _mock_kapso(monkeypatch, 400, {"error": {
+            "message": "Template name does not exist in the translation",
+            "type": "OAuthException", "code": 132001}})
+        with pytest.raises(RuntimeError):
+            _run(otp.send_code_whatsapp("+919876543210", "482913"))
+
+    def test_a_200_without_a_message_id_is_a_failure(self, monkeypatch):
+        """Only a wamid proves Meta accepted the message."""
+        import core.otp as otp
+        _kapso_env(monkeypatch)
+        _mock_kapso(monkeypatch, 200, {"messaging_product": "whatsapp", "messages": []})
+        with pytest.raises(RuntimeError):
+            _run(otp.send_code_whatsapp("+919876543210", "482913"))
+
+    def test_neither_the_key_nor_the_code_reaches_the_log(self, monkeypatch, caplog):
+        import logging
+        import core.otp as otp
+        _kapso_env(monkeypatch)
+        _mock_kapso(monkeypatch, 400, {"error": {"code": 131026, "type": "OAuthException"}})
+        with caplog.at_level(logging.DEBUG, logger="explore91.otp"):
+            with pytest.raises(RuntimeError):
+                _run(otp.send_code_whatsapp("+919876543210", "482913"))
+        assert KAPSO_ENV["KAPSO_API_KEY"] not in caplog.text
+        assert "482913" not in caplog.text
+        assert "9876543210" not in caplog.text, "the recipient was logged"
+        assert "131026" in caplog.text, "Meta's error code should be logged for debugging"
+
+    def test_refuses_to_send_when_unconfigured(self, monkeypatch):
+        import core.otp as otp
+        _kapso_env(monkeypatch, KAPSO_API_KEY="")
+        with pytest.raises(otp.OtpNotConfigured):
+            _run(otp.send_code_whatsapp("+919876543210", "482913"))
+
+    @pytest.mark.parametrize("raw,expected", [
+        ("9876543210", "+919876543210"),
+        ("+91 98765 43210", "+919876543210"),
+        ("919876543210", "+919876543210"),
+        ("09876543210", "+919876543210"),
+        ("98765-43210", "+919876543210"),
+        ("5876543210", None),          # Indian mobiles start 6-9
+        ("98765", None),
+        ("+1 415 555 0100", None),     # not Indian - refused, not guessed
+        ("", None),
+    ])
+    def test_indian_mobiles_normalise_and_others_are_refused(self, raw, expected):
+        import core.otp as otp
+        assert otp.normalise_in_mobile(raw) == expected

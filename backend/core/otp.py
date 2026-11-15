@@ -213,6 +213,109 @@ def _msg91_accepted(status_code: int, body) -> bool:
     return body.get("status") == "success" and body.get("hasError") is False
 
 
+# ---------------------------------------------------------------- WhatsApp --
+#
+# Delivered through Kapso, which fronts Meta's WhatsApp Cloud API. WhatsApp is
+# not SMS, so India's DLT registration does not apply - that is the reason for
+# this channel. Meta's own gate still does: messaging real users needs a
+# registered number, an approved display name and an approved AUTHENTICATION
+# template, with business verification for higher volume. Kapso's sandbox
+# number lets the integration be proven before any of that is approved.
+#
+# Authentication templates are fixed-format: Meta writes the text, we supply
+# only the code. Meta requires the code TWICE - as the body parameter and as
+# the copy-code button's parameter - and a send missing either is rejected.
+
+_KAPSO_REQUIRED = ("KAPSO_API_KEY", "KAPSO_PHONE_NUMBER_ID", "KAPSO_OTP_TEMPLATE")
+_KAPSO_BASE = "https://api.kapso.ai/meta/whatsapp/v24.0"
+
+
+def whatsapp_configured() -> bool:
+    if not all(os.environ.get(k) for k in _KAPSO_REQUIRED):
+        return False
+    try:
+        _pepper()
+    except OtpNotConfigured:
+        return False
+    return True
+
+
+def normalise_in_mobile(raw: str) -> Optional[str]:
+    """An Indian mobile number in E.164 ('+919876543210'), or None.
+
+    Accepts the forms people actually type: 10 digits, with a leading 0, or
+    with +91 / 91, and any spaces, dashes or brackets. Indian mobile numbers
+    start 6-9; anything else is refused rather than guessed at, since a
+    wrong normalisation sends someone's code to a stranger.
+    """
+    digits = "".join(ch for ch in (raw or "") if ch.isdigit())
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    if len(digits) != 10 or digits[0] not in "6789":
+        return None
+    return "+91" + digits
+
+
+def _kapso_accepted(status_code: int, body) -> bool:
+    """A send counts only if Meta returned a message id.
+
+    Meta reports most failures with a 4xx and an `error` object, but the one
+    thing that proves the message was accepted is a wamid in `messages`.
+    Requiring it means an unexpected 200 body cannot pass as success.
+    """
+    if not (200 <= status_code < 300) or not isinstance(body, dict):
+        return False
+    msgs = body.get("messages")
+    return bool(isinstance(msgs, list) and msgs and isinstance(msgs[0], dict) and msgs[0].get("id"))
+
+
+async def send_code_whatsapp(phone_e164: str, code: str) -> None:
+    """Deliver a code by WhatsApp. Module-level so tests can replace it."""
+    if not whatsapp_configured():
+        raise OtpNotConfigured("WhatsApp delivery is not configured")
+    to = phone_e164.lstrip("+")
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "template",
+        "template": {
+            "name": os.environ["KAPSO_OTP_TEMPLATE"],
+            "language": {"code": os.environ.get("KAPSO_OTP_TEMPLATE_LANG") or "en"},
+            "components": [
+                {"type": "body", "parameters": [{"type": "text", "text": code}]},
+                {"type": "button", "sub_type": "url", "index": "0",
+                 "parameters": [{"type": "text", "text": code}]},
+            ],
+        },
+    }
+    url = f"{_KAPSO_BASE}/{os.environ['KAPSO_PHONE_NUMBER_ID']}/messages"
+    async with _http_client() as client:
+        r = await client.post(
+            url,
+            headers={"X-API-Key": os.environ["KAPSO_API_KEY"],
+                     "Content-Type": "application/json"},
+            json=payload,
+        )
+    try:
+        body = r.json()
+    except ValueError:
+        body = None
+    if not _kapso_accepted(r.status_code, body):
+        # Meta's error code and type are safe to log; the body can echo the
+        # recipient and the request carried the API key.
+        err = (body or {}).get("error") if isinstance(body, dict) else None
+        logger.error(
+            "WhatsApp OTP not accepted: HTTP %s, meta_code=%r, type=%r",
+            r.status_code,
+            (err or {}).get("code") if isinstance(err, dict) else None,
+            (err or {}).get("type") if isinstance(err, dict) else None,
+        )
+        raise RuntimeError("whatsapp delivery failed")
+
+
 async def send_code_email(to: str, code: str) -> None:
     """Deliver a code. Module-level so tests can replace it."""
     backend = _backend()
