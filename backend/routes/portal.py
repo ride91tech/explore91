@@ -14,6 +14,15 @@ from seed.data import CITY_COORDS, SAMPLE_IMAGES
 router = APIRouter()
 
 
+def _review_weighted_rating(businesses) -> float:
+    """Average rating across all of these places' reviews, or 0 if none."""
+    total = sum(b.get("review_count") or 0 for b in businesses)
+    if not total:
+        return 0.0
+    weighted = sum((b.get("rating") or 0) * (b.get("review_count") or 0) for b in businesses)
+    return round(weighted / total, 2)
+
+
 @router.get("/owner/dashboard")
 async def owner_dashboard(current=Depends(get_current_user)):
     require_role(current, "owner")
@@ -31,9 +40,11 @@ async def owner_dashboard(current=Depends(get_current_user)):
         "booking_count": len(bookings),
         "upcoming_count": len(upcoming),
         "revenue_inr": revenue * 100,
-        "avg_rating": round(
-            sum(b.get("rating", 0) for b in my_biz) / max(1, len(my_biz)), 2
-        ),
+        # Across the owner's reviews, not a plain mean of each place's rating:
+        # a place with no reviews has rating 0 (ratings come from real reviews
+        # now), and averaging that in halved the score of a one-place-reviewed
+        # owner. 0 when nothing has been reviewed yet; the app shows "—".
+        "avg_rating": _review_weighted_rating(my_biz),
         "businesses": my_biz,
         "recent_bookings": sorted(
             bookings,

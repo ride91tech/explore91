@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pymongo.errors import DuplicateKeyError
 
 from core.db import db
 from core.slug import ensure_business_slug
@@ -141,25 +142,29 @@ async def toggle_reel_like(
     reel = await db.reels.find_one({"reel_id": payload.reel_id}, {"_id": 0})
     if not reel:
         raise HTTPException(status_code=404, detail="Reel not found")
-    existing = await db.reel_likes.find_one(
-        {"reel_id": payload.reel_id, "user_id": current["user_id"]}
-    )
-    if existing:
-        await db.reel_likes.delete_one({"_id": existing["_id"]})
-        await db.reels.update_one(
-            {"reel_id": payload.reel_id}, {"$inc": {"likes": -1}}
-        )
-        liked = False
-    else:
-        await db.reel_likes.insert_one({
-            "reel_id": payload.reel_id,
-            "user_id": current["user_id"],
-            "created_at": datetime.now(timezone.utc),
-        })
-        await db.reels.update_one(
-            {"reel_id": payload.reel_id}, {"$inc": {"likes": 1}}
-        )
+    key = {"reel_id": payload.reel_id, "user_id": current["user_id"]}
+
+    # The like row decides the outcome, so two taps at once are two clean
+    # toggles. Before, a double-tap had both requests find no like and try
+    # to insert; the unique (reel_id, user_id) index refused the second with
+    # a 500, the app rolled its heart back and showed "Couldn't save that
+    # like" for a like the server had kept. The count only moves when a row
+    # was really added or removed, so it cannot drift.
+    liked = None
+    for _ in range(3):
+        if (await db.reel_likes.delete_one(key)).deleted_count:
+            await db.reels.update_one({"reel_id": payload.reel_id}, {"$inc": {"likes": -1}})
+            liked = False
+            break
+        try:
+            await db.reel_likes.insert_one({**key, "created_at": datetime.now(timezone.utc)})
+        except DuplicateKeyError:
+            continue  # the other tap liked it a moment ago; this tap unlikes
+        await db.reels.update_one({"reel_id": payload.reel_id}, {"$inc": {"likes": 1}})
         liked = True
+        break
+    if liked is None:
+        raise HTTPException(status_code=409, detail="Too many taps at once. Try again.")
     updated = await db.reels.find_one({"reel_id": payload.reel_id}, {"_id": 0})
     return {"liked": liked, "likes": updated["likes"] if updated else 0}
 

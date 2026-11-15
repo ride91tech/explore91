@@ -11,6 +11,7 @@ from routes import (
     admin, ai, auth, catalog, interactions, journey, places, portal, reels,
     tickets,
 )
+from core.reviews import reconcile_reviews
 from seed.seed import ensure_indexes, seed_data
 from web import console as web_console
 from web import pages as web_pages
@@ -28,6 +29,9 @@ async def lifespan(_app: FastAPI):
     if not core_db.BOOTSTRAPPED:
         await ensure_indexes()
         await seed_data()
+        # After seeding: ratings come from real reviews, so this also
+        # replaces the seed's placeholder numbers on a fresh database.
+        await reconcile_reviews()
         core_db.BOOTSTRAPPED = True
     yield
     # Shutdown — do NOT close the client; it is shared across app instances.

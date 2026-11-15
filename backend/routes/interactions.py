@@ -4,8 +4,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from core.db import db
+from core.reviews import refresh_rating
 from core.security import client_key, get_current_user, rate_limit
 from models import (
     Booking,
@@ -36,23 +39,32 @@ async def get_saved(current=Depends(get_current_user)):
 
 @router.post("/saved/toggle")
 async def toggle_saved(payload: SavedToggle, current=Depends(get_current_user)):
-    doc = (
-        await db.saved.find_one({"user_id": current["user_id"]}, {"_id": 0})
-        or {"user_id": current["user_id"], "business_ids": []}
-    )
-    ids = doc.get("business_ids", [])
-    if payload.business_id in ids:
-        ids.remove(payload.business_id)
-        saved = False
-    else:
-        ids.append(payload.business_id)
-        saved = True
-    await db.saved.update_one(
-        {"user_id": current["user_id"]},
-        {"$set": {"business_ids": ids, "user_id": current["user_id"]}},
-        upsert=True,
-    )
-    return {"saved": saved, "business_id": payload.business_id}
+    # One atomic update that removes the id if present and appends it if not.
+    # This used to read the list, edit it in Python and write it back, so a
+    # double-tap read the same list twice and both taps saved: the second
+    # toggle was lost and the app (which showed it unsaved) disagreed with
+    # the server. Single-document updates are serialised, so two taps now
+    # always cancel out.
+    bid = payload.business_id
+    ids = {"$ifNull": ["$business_ids", []]}
+    toggle = [{"$set": {"business_ids": {"$cond": [
+        {"$in": [bid, ids]},
+        {"$filter": {"input": ids, "cond": {"$ne": ["$$this", bid]}}},
+        {"$concatArrays": [ids, [bid]]},
+    ]}}}]
+    for attempt in range(2):
+        try:
+            doc = await db.saved.find_one_and_update(
+                {"user_id": current["user_id"]}, toggle,
+                upsert=True, return_document=ReturnDocument.AFTER,
+            )
+            break
+        except DuplicateKeyError:
+            # Two first-ever saves raced to create this user's document; the
+            # other one won, so now there is a document to update.
+            if attempt:
+                raise
+    return {"saved": bid in doc.get("business_ids", []), "business_id": bid}
 
 
 # --- Bookings -------------------------------------------------------------
@@ -139,16 +151,29 @@ async def list_reviews(business_id: str):
 async def create_review(
     payload: ReviewCreate, request: Request, current=Depends(get_current_user)
 ):
+    """Post a review, or replace the one this person already wrote.
+
+    One review per person per place (a unique index enforces it): posting
+    again updates the rating and comment and keeps the review's id and
+    original date. The place's rating is then recomputed from its reviews.
+    """
     await rate_limit("review", client_key(request, current), limit=10, window_sec=60)
-    review = {
-        "review_id": f"rv_{uuid.uuid4().hex[:12]}",
-        "user_id": current["user_id"],
-        "user_name": current["name"],
-        "business_id": payload.business_id,
-        "rating": payload.rating,
-        "comment": payload.comment,
-        "created_at": datetime.now(timezone.utc),
+    if not await db.businesses.find_one({"business_id": payload.business_id}, {"_id": 1}):
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    key = {"business_id": payload.business_id, "user_id": current["user_id"]}
+    now = datetime.now(timezone.utc)
+    update = {
+        "$set": {"user_name": current["name"], "rating": payload.rating,
+                 "comment": payload.comment, "updated_at": now},
+        "$setOnInsert": {"review_id": f"rv_{uuid.uuid4().hex[:12]}", "created_at": now},
     }
-    await db.reviews.insert_one(dict(review))
-    review.pop("_id", None)
+    try:
+        await db.reviews.update_one(key, update, upsert=True)
+    except DuplicateKeyError:
+        # The same person's first review, posted twice at once; the other
+        # request created it, so this one updates it.
+        await db.reviews.update_one(key, update)
+    await refresh_rating(payload.business_id)
+    review = await db.reviews.find_one(key, {"_id": 0})
     return Review(**review)

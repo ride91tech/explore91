@@ -335,14 +335,14 @@ class TestAdminPanel:
 
 # --- Reviews -------------------------------------------------------------
 class TestReviews:
-    def test_list_and_create_review(self, api_client, auth_headers):
+    def test_list_and_create_review(self, api_client, auth_headers, test_session):
+        _, user_id, _ = test_session
         # pick some approved goa business
         r = api_client.get(f"{BASE_URL}/api/businesses", params={"city": "goa"})
         biz_id = r.json()[0]["business_id"]
 
         before = api_client.get(f"{BASE_URL}/api/businesses/{biz_id}/reviews")
         assert before.status_code == 200
-        before_ids = {rv["review_id"] for rv in before.json()}
 
         cr = api_client.post(f"{BASE_URL}/api/reviews",
                              json={"business_id": biz_id, "rating": 5,
@@ -352,8 +352,12 @@ class TestReviews:
 
         after = api_client.get(f"{BASE_URL}/api/businesses/{biz_id}/reviews")
         assert after.status_code == 200
-        assert new_id in {rv["review_id"] for rv in after.json()}
-        assert new_id not in before_ids
+        # One review per person per place: this session user may already
+        # have reviewed this place earlier in the run, in which case posting
+        # replaced that review rather than adding a second one.
+        mine = [rv for rv in after.json() if rv["user_id"] == user_id]
+        assert [rv["review_id"] for rv in mine] == [new_id], mine
+        assert (mine[0]["rating"], mine[0]["comment"]) == (5, "TEST_review")
 
 
 # --- AI endpoints --------------------------------------------------------
