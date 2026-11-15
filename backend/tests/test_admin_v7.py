@@ -156,24 +156,48 @@ class TestRevenueReporting:
         # Fees must track the real gross, not a per-booking constant.
         assert rep["total_fees"] == int(rep["total_gmv"] * 0.05)
 
-    def test_cancelled_booking_leaves_revenue(self, admin, priced_business):
-        before = requests.get(f"{BASE_URL}/api/admin/reports/gmv?days=30",
-                              headers=admin["H"], timeout=15).json()
+    @pytest.fixture
+    def isolated_business(self, priced_business):
+        """A priced place in a city of its own.
+
+        This test compared platform-wide totals, so a booking made by a test
+        on the other xdist worker between its reads failed it (641 == 640).
+        Reporting on a city nothing else uses counts only this test's
+        bookings.
+        """
+        tag = uuid.uuid4().hex[:8]
+        doc = {
+            "business_id": f"biz_TESTv7_{tag}", "name": "TESTv7 isolated", "category": "spas",
+            "city": f"testv7city{tag}", "address": "x", "lat": 15.5, "lng": 73.8,
+            "cover_image": "", "rating": 0.0, "review_count": 0, "is_approved": True,
+            "price_range": priced_business.get("price_range") or "$$",
+            "services": priced_business["services"],
+        }
+        _run(_mongo().businesses.insert_one(dict(doc)))
+        yield doc
+
+        async def _rm():
+            db = _mongo()
+            await db.businesses.delete_one({"business_id": doc["business_id"]})
+            await db.bookings.delete_many({"business_id": doc["business_id"]})
+        _run(_rm())
+
+    def test_cancelled_booking_leaves_revenue(self, admin, isolated_business):
+        report = f"{BASE_URL}/api/admin/reports/gmv?days=30&city={isolated_business['city']}"
+        before = requests.get(report, headers=admin["H"], timeout=15).json()
         b = requests.post(f"{BASE_URL}/api/bookings", headers=admin["H"], json={
-            "business_id": priced_business["business_id"], "date": future_date(7),
+            "business_id": isolated_business["business_id"], "date": future_date(7),
             "time": "21:00", "guests": 2, "notes": "TESTv7_cancelme",
         }, timeout=15).json()
 
-        mid = requests.get(f"{BASE_URL}/api/admin/reports/gmv?days=30",
-                           headers=admin["H"], timeout=15).json()
+        mid = requests.get(report, headers=admin["H"], timeout=15).json()
         assert mid["total_gmv"] == before["total_gmv"] + b["amount_inr"]
 
         d = requests.delete(f"{BASE_URL}/api/bookings/{b['booking_id']}",
                             headers=admin["H"], timeout=15)
         assert d.status_code == 200
 
-        after = requests.get(f"{BASE_URL}/api/admin/reports/gmv?days=30",
-                             headers=admin["H"], timeout=15).json()
+        after = requests.get(report, headers=admin["H"], timeout=15).json()
         assert after["total_gmv"] == before["total_gmv"], "cancelled booking still counted"
         assert after["total_bookings"] == before["total_bookings"]
 
