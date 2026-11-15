@@ -36,10 +36,19 @@ export default function BookScreen() {
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState<{ id: string } | null>(null);
+  const [loadFailure, setLoadFailure] = useState<null | "missing" | "error">(null);
 
+  // Without the catch, a failed fetch left `biz` null forever: release builds
+  // showed a spinner with no way out, and dev builds an uncaught rejection.
+  // Same rule as the place page: a 404 will not fix itself, anything else is
+  // probably the network and is worth retrying.
   const load = useCallback(async () => {
-    const b = await api<Business>(`/businesses/${id}`);
-    setBiz(b);
+    setLoadFailure(null);
+    try {
+      setBiz(await api<Business>(`/businesses/${id}`));
+    } catch (e: any) {
+      setLoadFailure(e?.status === 404 ? "missing" : "error");
+    }
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
@@ -89,6 +98,43 @@ export default function BookScreen() {
       setSubmitting(false);
     }
   };
+
+  if (!biz && loadFailure) {
+    const missing = loadFailure === "missing";
+    return (
+      <View style={[styles.loader, { padding: spacing.xl, gap: spacing.md }]}>
+        <Ionicons
+          name={missing ? "compass-outline" : "cloud-offline-outline"}
+          size={30}
+          color={colors.onSurfaceTertiary}
+        />
+        <Text style={styles.gone} testID="book-unavailable">
+          {missing ? "This place isn't taking bookings on Explore91." : "Couldn't load this place."}
+        </Text>
+        <Text style={styles.goneSub}>
+          {missing
+            ? "It may have been removed, or the link may be out of date."
+            : "Check your connection and try again."}
+        </Text>
+        <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
+          {!missing ? (
+            <Pressable testID="book-retry" onPress={load} style={styles.goneBtn}>
+              <Text style={styles.goneBtnText}>Try again</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            testID="book-explore"
+            onPress={() => router.replace("/(tabs)/explore")}
+            style={[styles.goneBtn, missing && styles.goneBtnPrimary]}
+          >
+            <Text style={[styles.goneBtnText, missing && styles.goneBtnTextPrimary]}>
+              Explore nearby
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   if (!biz) {
     return <View style={styles.loader}><ActivityIndicator color={colors.brandPrimary} /></View>;
@@ -282,6 +328,19 @@ function RecapRow({ icon, label, value }: { icon: any; label: string; value: str
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  gone: { fontSize: tType.lg, fontFamily: fonts.bodyBold, color: colors.onSurface, textAlign: "center" },
+  goneSub: { fontSize: tType.base, color: colors.onSurfaceSecondary, textAlign: "center" },
+  goneBtn: {
+    paddingHorizontal: spacing.lg,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  goneBtnPrimary: { backgroundColor: colors.brandPrimary },
+  goneBtnText: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
+  goneBtnTextPrimary: { color: "#FFF" },
   header: {
     flexDirection: "row",
     alignItems: "center",
