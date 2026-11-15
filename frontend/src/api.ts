@@ -101,7 +101,9 @@ export type Business = {
 
 export type UserT = {
   user_id: string;
-  email: string;
+  // Accounts are phone-first: either may be missing, never both.
+  email?: string | null;
+  phone?: string | null;
   name: string;
   picture?: string | null;
   wallet_points: number;

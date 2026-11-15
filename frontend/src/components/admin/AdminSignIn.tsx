@@ -206,18 +206,32 @@ export function AdminSignIn() {
               </View>
               <Text style={styles.h1}>Almost there.</Text>
               <Text style={styles.sub}>
-                You're signed in as <Text style={{ fontFamily: fonts.bodyBold }}>{user.email}</Text>. Your account needs the{" "}
+                You're signed in as <Text style={{ fontFamily: fonts.bodyBold }}>{user.email ?? user.phone}</Text>. Your account needs the{" "}
                 <Text style={styles.code}>admin</Text> role to access this console.
               </Text>
 
-              <View style={styles.stepBlock}>
-                <Text style={styles.stepTitle}>How to get access</Text>
-                <Text style={styles.stepItem}>
-                  1. Ask a platform operator to add <Text style={styles.code}>{user.email}</Text> to the{" "}
-                  <Text style={styles.code}>ADMIN_EMAILS</Text> secret in the deployment settings, then redeploy.
-                </Text>
-                <Text style={styles.stepItem}>2. Come back here and tap "Request admin role" below.</Text>
-              </View>
+              {user.email ? (
+                <View style={styles.stepBlock}>
+                  <Text style={styles.stepTitle}>How to get access</Text>
+                  <Text style={styles.stepItem}>
+                    1. Ask a platform operator to add <Text style={styles.code}>{user.email}</Text> to the{" "}
+                    <Text style={styles.code}>ADMIN_EMAILS</Text> secret in the deployment settings, then redeploy.
+                  </Text>
+                  <Text style={styles.stepItem}>2. Come back here and tap "Request admin role" below.</Text>
+                </View>
+              ) : (
+                // The admin allowlist is by email, so an account that signed
+                // in with a phone number can never be granted admin. Say so,
+                // rather than asking someone to add a phone number to an
+                // email allowlist.
+                <View style={styles.stepBlock}>
+                  <Text style={styles.stepTitle}>How to get access</Text>
+                  <Text style={styles.stepItem}>
+                    This account signed in with a mobile number. Admin access is granted by email
+                    address, so sign out and sign in here with your email instead.
+                  </Text>
+                </View>
+              )}
 
               <Pressable
                 testID="admin-request-role"

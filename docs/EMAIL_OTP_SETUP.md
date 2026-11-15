@@ -1,6 +1,6 @@
 # Turning on email sign-in codes
 
-**Status:** built and tested, not live. Delivery is through MSG91. The backend endpoints, both sign-in
+**Status:** built and tested, not live. Email codes go through MSG91; phone codes go by WhatsApp through Kapso. The backend endpoints, both sign-in
 screens and the tests are in `main`. Nothing below has been done in
 production yet.
 
@@ -146,14 +146,68 @@ Only once real users are signing in with codes:
 
 This is roadmap step 0.1e.
 
-## 7. Phone numbers, later
+## 7. Phone sign-in by WhatsApp — Kapso
 
-MSG91 is also how SMS will work, but sending OTP by SMS in India needs **DLT
-registration**: your entity, a sender ID (header) and the OTP message template,
-each approved, then linked in MSG91 as a flow. If that is already done in your
-MSG91 account, phone sign-in is mostly a client and identity change — the
-code generation, attempt limits and single-use guarantees here carry over
-unchanged. If not, it is the one-to-two-week clock described at the top.
+Built and tested; turns on by configuration alone. **Phone is the preferred
+way in**: the login screen asks for a mobile number first and offers email as
+the alternative. It reads `GET /api/auth/methods` to decide, so until WhatsApp
+is configured the screen simply shows email — it never offers a channel that
+would answer 503.
+
+WhatsApp is not SMS, so **DLT does not apply**. Meta's own approval does, and
+[Kapso](https://kapso.com) does not remove it: it speeds up our side (a free
+sandbox number, a clean API, Meta's fees passed through with no markup), not
+Meta's.
+
+1. Create a Kapso account and project. **Test on the sandbox number first** —
+   it proves the integration end to end before Meta approves anything.
+2. Connect a real number through Meta Embedded Signup. Meta must approve the
+   **display name**, and **business verification** raises the messaging limit.
+   This is the step with an unpredictable timeline — start it first.
+3. Create an **authentication template** with a **copy-code button**. Meta
+   fixes the wording; we only supply the code. Note its name and language.
+4. Configure:
+
+| Variable | What | Where |
+|---|---|---|
+| `KAPSO_API_KEY` | Kapso → Integrations → API keys | Secret Manager |
+| `KAPSO_PHONE_NUMBER_ID` | the connected number's ID | plain env |
+| `KAPSO_OTP_TEMPLATE` | the authentication template's name | plain env |
+| `KAPSO_OTP_TEMPLATE_LANG` | its language code, e.g. `en` (the default) | plain env |
+| `OTP_PHONE_BACKEND` | leave unset (`kapso`); `log` is for local development only and is refused on Cloud Run | — |
+
+`OTP_PEPPER` is shared with email codes; nothing extra is needed for it.
+
+**Accounts are phone-first.** A new number creates an account with no email,
+and its display name defaults to "Explorer" — never the number, because
+display names are shown publicly on reviews. A phone-only account cannot be
+an admin: the admin allowlist is by email, and the console says so.
+
+### Not done yet: linking
+
+An account created with an email and later signed into with a phone number
+becomes **two accounts**. Pre-launch there are almost no existing accounts,
+so this is acceptable for now, but it needs a "add your phone to this
+account" step (verify a code while signed in, attach the number) before it
+matters. Roadmap 0.1b.
+
+## 8. What the first deploy of this does to the database
+
+The users collection's email index changes from **unique** to **unique when
+present** — a plain unique index allows exactly one account with no email, so
+the second phone-only sign-up would fail. The swap runs at startup, once:
+every later start sees it done and does nothing (tested — zero index drops on
+an already-migrated database). If a duplicate email ever slipped into the
+moment between dropping the old index and creating the new one, the new
+revision fails to start rather than running without the constraint, and the
+canary at 0% traffic catches that before anyone is affected.
+
+The privacy notice moves to **version 2026-11-15** (phone numbers collected;
+Kapso, Meta and MSG91 named). The notice promises that material changes are
+agreed to rather than quietly replaced, so a returning user's next sign-in
+records consent against the new version; their earlier grant is kept in
+`consent_history`, not overwritten. Sessions last 7 days, so everyone active
+will have re-agreed within a week.
 
 ---
 

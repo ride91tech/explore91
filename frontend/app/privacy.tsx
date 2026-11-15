@@ -18,7 +18,7 @@ import { Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
-export const NOTICE_VERSION = "2026-10-26";
+export const NOTICE_VERSION = "2026-11-15";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -62,7 +62,10 @@ export default function Privacy() {
         </P>
 
         <Section title="What we collect">
-          <Item>Your email address, which identifies your account.</Item>
+          <Item>
+            Your mobile number or your email address — whichever you sign in
+            with. It identifies your account. You do not need to give both.
+          </Item>
           <Item>A display name, if you give one. It appears on reviews you write.</Item>
           <Item>The city you choose to browse.</Item>
           <Item>
@@ -97,8 +100,12 @@ export default function Privacy() {
           <P>
             Our hosting and database providers process data on our behalf under
             contract: Google Cloud (Mumbai region), MongoDB Atlas and Vercel.
+            Sign-in codes are delivered by Kapso and Meta when sent by
+            WhatsApp, and by MSG91 when sent by email; they receive your number
+            or address and the code, nothing else.
             Businesses you review see the review and the display name you chose.
-            We do not share your email address with them.
+            We do not share your number or email address with them, and we never
+            use your number as your display name.
           </P>
         </Section>
 

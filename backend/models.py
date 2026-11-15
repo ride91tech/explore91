@@ -10,7 +10,11 @@ from core.security import ALLOWED_URL
 # --- Auth / user -----------------------------------------------------------
 class User(BaseModel):
     user_id: str
-    email: str
+    # Either may be absent, never both. Accounts are phone-first: a new number
+    # signing in creates an account with no email, so email is optional here
+    # and the users.email index is unique only where an email is present.
+    email: Optional[str] = None
+    phone: Optional[str] = None
     name: str
     picture: Optional[str] = None
     wallet_points: int = 0
@@ -72,6 +76,19 @@ class OtpVerifyRequest(OtpSendRequest):
     name: Optional[str] = Field(default=None, max_length=120)
     # See DevSignIn.is_adult and core/consent.py. Required to CREATE an
     # account; an existing one signs in without it.
+    is_adult: bool = False
+
+
+class OtpPhoneSendRequest(BaseModel):
+    # Free-form on the way in - people type spaces, dashes, +91 or a leading
+    # 0. core.otp.normalise_in_mobile decides what is a valid Indian mobile;
+    # the length bound here only stops absurd input before that runs.
+    phone: str = Field(min_length=5, max_length=24)
+
+
+class OtpPhoneVerifyRequest(OtpPhoneSendRequest):
+    code: str = Field(pattern=r"^[0-9]{6}$")
+    name: Optional[str] = Field(default=None, max_length=120)
     is_adult: bool = False
 
 

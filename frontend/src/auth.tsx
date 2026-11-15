@@ -21,6 +21,9 @@ type Ctx = {
   requestCode: (email: string) => Promise<void>;
   /** Exchange a code for a session. */
   verifyCode: (email: string, code: string, isAdult?: boolean) => Promise<void>;
+  /** Send a six-digit code to an Indian mobile by WhatsApp. */
+  requestPhoneCode: (phone: string) => Promise<void>;
+  verifyPhoneCode: (phone: string, code: string, isAdult?: boolean) => Promise<void>;
   signInWithApple: (isAdult?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -33,6 +36,8 @@ const AuthCtx = createContext<Ctx>({
   deleteAccount: async () => {},
   requestCode: async () => {},
   verifyCode: async () => {},
+  requestPhoneCode: async () => {},
+  verifyPhoneCode: async () => {},
   signInWithApple: async () => {},
   signOut: async () => {},
   refresh: async () => {},
@@ -98,6 +103,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   }, []);
 
+  const requestPhoneCode = useCallback(async (phone: string) => {
+    await api("/auth/otp/phone/send", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    });
+  }, []);
+
+  const verifyPhoneCode = useCallback(async (phone: string, code: string, isAdult = false) => {
+    const res = await api<{ session_token: string; user: UserT }>("/auth/otp/phone/verify", {
+      method: "POST",
+      body: JSON.stringify({ phone, code, is_adult: isAdult }),
+    });
+    await setToken(res.session_token);
+    setUser(res.user);
+  }, []);
+
   /** Erase the account. Irreversible, and the caller is expected to have
    *  confirmed with the user first — this does not ask. */
   const deleteAccount = useCallback(async () => {
@@ -149,7 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signInWithApple, signOut, refresh, deleteAccount, requestCode, verifyCode }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signInWithApple, signOut, refresh, deleteAccount, requestCode, verifyCode, requestPhoneCode, verifyPhoneCode }}>
       {children}
     </AuthCtx.Provider>
   );

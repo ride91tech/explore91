@@ -22,7 +22,10 @@ async def create_ticket(
         "ticket_id": f"tk_{uuid.uuid4().hex[:10]}",
         "user_id": current["user_id"],
         "user_name": current["name"],
-        "user_email": current["email"],
+        # .get: phone-first accounts may have no email. Record the phone too,
+        # so support can reach whoever raised it either way.
+        "user_email": current.get("email"),
+        "user_phone": current.get("phone"),
         "subject": payload.subject.strip(),
         "message": payload.message.strip(),
         "status": "open",

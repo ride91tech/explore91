@@ -37,7 +37,9 @@ from core.otp import (
     OtpNotConfigured,
     claim_code,
     issue_code,
+    normalise_in_mobile,
     otp_configured,
+    whatsapp_configured,
 )
 import core.otp as otp_mod
 from core.security import (
@@ -51,6 +53,8 @@ from models import (
     AppleSignInRequest,
     AuthResponse,
     DevSignIn,
+    OtpPhoneSendRequest,
+    OtpPhoneVerifyRequest,
     OtpSendRequest,
     OtpVerifyRequest,
     RoleUpgrade,
@@ -142,13 +146,13 @@ async def root():
     return {"service": "Explore91", "status": "ok"}
 
 
-async def _sign_in_by_email(
-    raw_email: str, provided_name: Optional[str], is_adult: bool, token_prefix: str
+async def _sign_in(
+    field: str, value: str, provided_name: Optional[str], is_adult: bool, token_prefix: str
 ) -> AuthResponse:
-    """Find or create the account for an address and issue it a session.
+    """Find or create the account for an email or phone, and issue a session.
 
-    Every email-based sign-in comes through here: /auth/dev today, /auth/otp
-    from now on. It exists because the consent and age rules were once
+    Every code-based sign-in comes through here - /auth/dev, email codes and
+    phone codes - with `field` either "email" or "phone". It exists because the consent and age rules were once
     written inline in one handler, and the second and third sign-in paths
     did not get them - consent went unrecorded on Apple and for every
     returning user. One function, so a fourth path cannot drift.
@@ -156,18 +160,28 @@ async def _sign_in_by_email(
     The caller must already have established that the person controls the
     address (OTP) or decided not to care (dev). This function does not check.
     """
-    email = raw_email.strip().lower()
-    name = (provided_name or "").strip() or email.split("@")[0]
+    if field not in ("email", "phone"):
+        raise ValueError(f"cannot sign in by {field!r}")
+    if field == "email":
+        value = value.strip().lower()
+        default_name = value.split("@")[0]
+    else:
+        # Never the number itself: display names are shown publicly on
+        # reviews, and a phone number is not something to publish by default.
+        default_name = "Explorer"
+    name = (provided_name or "").strip() or default_name
     now = datetime.now(timezone.utc)
 
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    existing = await db.users.find_one({field: value}, {"_id": 0})
     if existing:
         user_doc = await _refresh_existing(existing, provided_name, name, is_adult, now)
     else:
         require_adult_for_new_account(is_adult)
         user_doc = {
             "user_id": f"user_{uuid.uuid4().hex[:12]}",
-            "email": email,
+            # Only the identifier they signed in with. The other field is
+            # left absent, not null, so the unique-when-present index skips it.
+            field: value,
             "name": name,
             "picture": None,
             "wallet_points": 500,
@@ -184,7 +198,7 @@ async def _sign_in_by_email(
             # account, both inserted, and the unique index on email refused
             # the second. That was a 500. The account now exists, so treat
             # this exactly as a returning user.
-            existing = await db.users.find_one({"email": email}, {"_id": 0})
+            existing = await db.users.find_one({field: value}, {"_id": 0})
             user_doc = await _refresh_existing(existing, provided_name, name, is_adult, now)
 
     session_token = f"{token_prefix}{uuid.uuid4().hex}{uuid.uuid4().hex}"
@@ -285,8 +299,8 @@ async def dev_sign_in(request: Request):
 
     # The prefix makes these identifiable in user_sessions, so they can be
     # found and purged when real sign-in lands.
-    return await _sign_in_by_email(
-        payload.email, payload.name, payload.is_adult, token_prefix="dev_"
+    return await _sign_in(
+        "email", payload.email, payload.name, payload.is_adult, token_prefix="dev_"
     )
 
 
@@ -338,8 +352,65 @@ async def otp_verify(payload: OtpVerifyRequest, request: Request):
     await rate_limit("otp_verify_ip", client_key(request), limit=30, window_sec=600)
     if not await claim_code(email, payload.code):
         raise HTTPException(status_code=400, detail="That code is wrong or has expired.")
-    return await _sign_in_by_email(
-        email, payload.name, payload.is_adult, token_prefix="otp_"
+    return await _sign_in(
+        "email", email, payload.name, payload.is_adult, token_prefix="otp_"
+    )
+
+
+@router.get("/auth/methods")
+async def auth_methods():
+    """Which ways in are live right now, so the app never offers a dead one.
+
+    Phone is the preferred way in, but WhatsApp delivery depends on Meta
+    approving a number and a template, so for a while only email will be
+    configured. The sign-in screen reads this to choose its default and to
+    hide what would only answer 503. Reveals nothing beyond what trying the
+    endpoints would.
+    """
+    return {"phone": whatsapp_configured(), "email": otp_configured()}
+
+
+def _require_whatsapp() -> None:
+    if not whatsapp_configured():
+        raise HTTPException(status_code=503, detail="Sign-in by phone is not available yet")
+
+
+@router.post("/auth/otp/phone/send", status_code=202)
+async def otp_phone_send(payload: OtpPhoneSendRequest, request: Request):
+    """Send a six-digit sign-in code to an Indian mobile number by WhatsApp.
+
+    Same rules as the email route. The per-caller bucket is SHARED with
+    email (otp_send_ip), so alternating channels does not double a client's
+    allowance; the per-number bucket is its own.
+    """
+    _require_whatsapp()
+    phone = normalise_in_mobile(payload.phone)
+    if not phone:
+        raise HTTPException(status_code=422, detail="Enter a 10-digit Indian mobile number.")
+    await rate_limit("otp_send_ip", client_key(request), limit=20, window_sec=3600)
+    await rate_limit("otp_send_phone", f"p:{phone}", limit=5, window_sec=3600)
+    code = await issue_code(phone)
+    try:
+        await otp_mod.send_code_whatsapp(phone, code)
+    except OtpNotConfigured:
+        raise HTTPException(status_code=503, detail="Sign-in by phone is not available yet")
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not send the code. Please try again.")
+    return {"sent": True}
+
+
+@router.post("/auth/otp/phone/verify", response_model=AuthResponse)
+async def otp_phone_verify(payload: OtpPhoneVerifyRequest, request: Request):
+    """Exchange a phone code for a session. One error for every failure."""
+    _require_whatsapp()
+    await rate_limit("otp_verify_ip", client_key(request), limit=30, window_sec=600)
+    phone = normalise_in_mobile(payload.phone)
+    # A number that cannot be valid cannot have a code, so it gets the same
+    # answer as a wrong code rather than a distinguishable 422.
+    if not phone or not await claim_code(phone, payload.code):
+        raise HTTPException(status_code=400, detail="That code is wrong or has expired.")
+    return await _sign_in(
+        "phone", phone, payload.name, payload.is_adult, token_prefix="otp_"
     )
 
 

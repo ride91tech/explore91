@@ -19,7 +19,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useAuth } from "@/src/auth";
-import { useEmailOtp } from "@/src/useEmailOtp";
+import { useOtp, type OtpChannel } from "@/src/useEmailOtp";
+import { api } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1685271552630-9bc169185566?crop=entropy&cs=srgb&fm=jpg&w=1600&q=85";
@@ -30,11 +31,29 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { signInWithApple } = useAuth();
-  const otp = useEmailOtp();
+  // One instance per channel, so switching keeps what was typed in each.
+  const phoneOtp = useOtp("phone");
+  const emailOtp = useOtp("email");
+  // Phone is the preferred way in, but only offered once the server says
+  // WhatsApp delivery is live - until Meta approves the number and template
+  // it would answer 503, and a default that fails first time is worse than
+  // no option. Unknown (null) until /auth/methods answers.
+  const [methods, setMethods] = useState<{ phone: boolean; email: boolean } | null>(null);
+  const [channel, setChannel] = useState<OtpChannel>("email");
+  const otp = channel === "phone" ? phoneOtp : emailOtp;
   const [agreed, setAgreed] = useState(false);
   const { width, height } = Dimensions.get("window");
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<{ phone: boolean; email: boolean }>("/auth/methods")
+      .then((m) => {
+        setMethods(m);
+        if (m.phone) setChannel("phone");
+      })
+      .catch(() => setMethods({ phone: false, email: true }));
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === "ios") {
@@ -45,7 +64,7 @@ export default function Login() {
   // Consent is a precondition, not a formality: DPDP s6 wants a clear
   // affirmative action, which a pre-ticked box or an implied agreement in
   // small print is not. So no code is sent until it is ticked.
-  const ready = otp.emailOk && agreed && !otp.busy;
+  const ready = otp.valueOk && agreed && !otp.busy;
 
   const handleApple = async () => {
     // Belt and braces with the dimmed wrapper below: the consent box gates
@@ -97,18 +116,18 @@ export default function Login() {
             From candlelit dining to sunrise treks — book across restaurants, hotels, spas, events and more, all in one app.
           </Text>
 
-          {otp.step === "email" ? (
+          {otp.step === "entry" ? (
             <>
               <TextInput
-                testID="signin-email"
-                value={otp.email}
-                onChangeText={otp.setEmail}
-                placeholder="you@example.com"
+                testID={channel === "phone" ? "signin-phone" : "signin-email"}
+                value={otp.value}
+                onChangeText={otp.setValue}
+                placeholder={channel === "phone" ? "Mobile number" : "you@example.com"}
                 placeholderTextColor="rgba(255,255,255,0.45)"
-                keyboardType="email-address"
+                keyboardType={channel === "phone" ? "phone-pad" : "email-address"}
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoComplete="email"
+                autoComplete={channel === "phone" ? "tel" : "email"}
                 returnKeyType="go"
                 onSubmitEditing={() => ready && otp.send()}
                 editable={!otp.busy}
@@ -123,15 +142,24 @@ export default function Login() {
                 {otp.busy ? (
                   <ActivityIndicator color={colors.onSurface} />
                 ) : (
-                  <Text style={styles.ctaText}>Email me a code</Text>
+                  <Text style={styles.ctaText}>{channel === "phone" ? "Send code on WhatsApp" : "Email me a code"}</Text>
                 )}
               </Pressable>
+              {methods?.phone && methods?.email ? (
+                <Text
+                  testID="signin-switch-channel"
+                  style={styles.switchChannel}
+                  onPress={() => setChannel(channel === "phone" ? "email" : "phone")}
+                >
+                  {channel === "phone" ? "Use email instead" : "Use mobile number instead"}
+                </Text>
+              ) : null}
             </>
           ) : (
             <>
               <Text testID="signin-code-sent" style={styles.sentTo}>
                 Enter the 6-digit code we sent to{"\n"}
-                <Text style={styles.sentToEmail}>{otp.email.trim()}</Text>
+                <Text style={styles.sentToEmail}>{otp.sentTo}</Text>{channel === "phone" ? " on WhatsApp" : ""}
               </Text>
               <TextInput
                 testID="signin-code"
@@ -168,14 +196,14 @@ export default function Login() {
                   Send a new code
                 </Text>
                 <Text style={styles.codeLinkSep}>·</Text>
-                <Text testID="signin-change-email" style={styles.codeLink} onPress={otp.changeEmail}>
-                  Use a different email
+                <Text testID="signin-change-email" style={styles.codeLink} onPress={otp.changeEntry}>
+                  {channel === "phone" ? "Use a different number" : "Use a different email"}
                 </Text>
               </View>
             </>
           )}
 
-          {appleAvailable && otp.step === "email" ? (
+          {appleAvailable && otp.step === "entry" ? (
             <View
               testID="apple-signin-wrap"
               pointerEvents={agreed ? "auto" : "none"}
@@ -193,7 +221,7 @@ export default function Login() {
 
           {otp.error ?? error ? <Text style={styles.error}>{otp.error ?? error}</Text> : null}
 
-          {otp.step === "email" ? (
+          {otp.step === "entry" ? (
           <Pressable
             testID="consent-checkbox"
             onPress={() => setAgreed((v) => !v)}
@@ -251,6 +279,10 @@ const styles = StyleSheet.create({
   },
   ctaDisabled: { opacity: 0.45 },
   ctaText: { color: colors.onSurface, fontSize: 16, fontFamily: fonts.bodyBold },
+  switchChannel: {
+    color: "rgba(255,255,255,0.85)", fontSize: 13, textAlign: "center",
+    textDecorationLine: "underline", marginTop: spacing.md,
+  },
   sentTo: {
     color: "rgba(255,255,255,0.75)", fontSize: 14, lineHeight: 21,
     textAlign: "center", marginBottom: spacing.md,

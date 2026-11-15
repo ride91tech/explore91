@@ -106,25 +106,27 @@ def generate_code() -> str:
     return f"{secrets.randbelow(10 ** CODE_DIGITS):0{CODE_DIGITS}d}"
 
 
-def code_digest(email: str, code: str) -> str:
-    """Keyed digest of an address and its code.
+def code_digest(identifier: str, code: str) -> str:
+    """Keyed digest of an identifier and its code.
 
-    The address is mixed in so a digest is only ever valid for the inbox it
-    was sent to: knowing one person's code tells you nothing about another's.
+    The identifier - a lowercased email or an E.164 phone number - is mixed
+    in so a digest is only valid for the inbox or phone it was sent to:
+    knowing one person's code tells you nothing about another's. The two
+    kinds cannot collide, since only an email contains '@'.
     """
-    msg = f"{email.strip().lower()}:{code}".encode()
+    msg = f"{identifier.strip().lower()}:{code}".encode()
     return hmac.new(_pepper(), msg, hashlib.sha256).hexdigest()
 
 
-async def issue_code(email: str) -> str:
-    """Store a fresh code for this address, replacing any live one."""
+async def issue_code(identifier: str) -> str:
+    """Store a fresh code for this email or phone, replacing any live one."""
     now = datetime.now(timezone.utc)
     code = generate_code()
     await db.otp_codes.update_one(
-        {"email": email},
+        {"identifier": identifier},
         {"$set": {
-            "email": email,
-            "code_digest": code_digest(email, code),
+            "identifier": identifier,
+            "code_digest": code_digest(identifier, code),
             "attempts": 0,
             "created_at": now,
             "expires_at": now + CODE_TTL,
@@ -134,7 +136,7 @@ async def issue_code(email: str) -> str:
     return code
 
 
-async def claim_code(email: str, code: str) -> bool:
+async def claim_code(identifier: str, code: str) -> bool:
     """True exactly once for a correct, live code. Never raises on a bad one.
 
     Every failure mode returns the same False - wrong code, expired code, no
@@ -148,13 +150,13 @@ async def claim_code(email: str, code: str) -> bool:
     # and counting after would let a burst of concurrent wrong guesses all
     # read attempts=0 and all get through.
     doc = await db.otp_codes.find_one_and_update(
-        {"email": email, "expires_at": {"$gt": now}, "attempts": {"$lt": MAX_ATTEMPTS}},
+        {"identifier": identifier, "expires_at": {"$gt": now}, "attempts": {"$lt": MAX_ATTEMPTS}},
         {"$inc": {"attempts": 1}},
         return_document=ReturnDocument.AFTER,
     )
     if not doc:
         return False
-    if not hmac.compare_digest(doc["code_digest"], code_digest(email, code)):
+    if not hmac.compare_digest(doc["code_digest"], code_digest(identifier, code)):
         return False
 
     # Claim it. If two requests carried the right code at once, only one
@@ -230,14 +232,25 @@ _KAPSO_REQUIRED = ("KAPSO_API_KEY", "KAPSO_PHONE_NUMBER_ID", "KAPSO_OTP_TEMPLATE
 _KAPSO_BASE = "https://api.kapso.ai/meta/whatsapp/v24.0"
 
 
+def _phone_backend() -> Optional[str]:
+    """`kapso` (the default) for real delivery, or `log` for local
+    development, mirroring OTP_EMAIL_BACKEND=log. Anything else is off."""
+    b = (os.environ.get("OTP_PHONE_BACKEND") or "kapso").strip().lower()
+    return b if b in {"kapso", "log"} else None
+
+
 def whatsapp_configured() -> bool:
-    if not all(os.environ.get(k) for k in _KAPSO_REQUIRED):
-        return False
     try:
         _pepper()
     except OtpNotConfigured:
         return False
-    return True
+    backend = _phone_backend()
+    if backend == "log":
+        # Writes live codes to the log, so never on Cloud Run.
+        return not os.environ.get("K_SERVICE")
+    if backend == "kapso":
+        return all(os.environ.get(k) for k in _KAPSO_REQUIRED)
+    return False
 
 
 def normalise_in_mobile(raw: str) -> Optional[str]:
@@ -275,6 +288,11 @@ async def send_code_whatsapp(phone_e164: str, code: str) -> None:
     """Deliver a code by WhatsApp. Module-level so tests can replace it."""
     if not whatsapp_configured():
         raise OtpNotConfigured("WhatsApp delivery is not configured")
+    if _phone_backend() == "log":
+        if os.environ.get("K_SERVICE"):
+            raise OtpNotConfigured("the log backend is refused on Cloud Run")
+        logger.warning("Phone OTP for local development: %s -> %s", phone_e164, code)
+        return
     to = phone_e164.lstrip("+")
     payload = {
         "messaging_product": "whatsapp",

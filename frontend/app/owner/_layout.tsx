@@ -156,7 +156,7 @@ export default function OwnerLayout() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
-          <Text style={styles.userEmail} numberOfLines={1}>{user.email}</Text>
+          <Text style={styles.userEmail} numberOfLines={1}>{user.email ?? user.phone}</Text>
         </View>
         <Pressable testID="owner-signout" onPress={() => signOut()} hitSlop={6}>
           <Ionicons name="log-out-outline" size={16} color={colors.onSurfaceTertiary} />

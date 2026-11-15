@@ -61,7 +61,9 @@ ALLOWED_ORIGINS = [
 # Bump PRIVACY_NOTICE_VERSION whenever the notice changes materially. Consent
 # is recorded against a version so that "what did they agree to" has an
 # answer; without it, a later rewrite silently rewrites everyone's consent.
-PRIVACY_NOTICE_VERSION = "2026-10-26"
+# 2026-11-15: phone numbers collected, and WhatsApp (Kapso, Meta) and
+# email (MSG91) added as processors. Material, so returning users re-agree.
+PRIVACY_NOTICE_VERSION = "2026-11-15"
 
 # The purposes consent is collected for, in the words the notice uses. DPDP
 # s6 wants consent to be specific, so a single "I agree" to an unenumerated

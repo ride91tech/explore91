@@ -1,4 +1,5 @@
 """Idempotent seed helpers for businesses and reels."""
+from pymongo.errors import OperationFailure
 import random
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -195,8 +196,48 @@ async def seed_data() -> None:
     await backfill_reel_slugs()
 
 
+async def _drop_index_if_present(coll, name: str) -> None:
+    try:
+        await coll.drop_index(name)
+    except OperationFailure:
+        pass  # absent, or another instance dropped it first
+
+
+async def _ensure_unique_when_present(coll, field: str) -> None:
+    """A unique index on `field` that ignores documents without it.
+
+    Idempotent and safe to run on several instances starting at once, since
+    every Cloud Run instance runs this at boot. It replaces an older plain
+    unique index of the same name if one exists. Between the drop and the
+    create there is a moment with no uniqueness on the field; if a duplicate
+    slipped into it, the create fails loudly and the revision does not
+    start - which the canary deploy catches before any traffic moves, rather
+    than a service running quietly without the constraint.
+    """
+    name = f"{field}_1"
+    want = {field: {"$type": "string"}}
+    current = (await coll.index_information()).get(name)
+    if current and current.get("unique") and dict(current.get("partialFilterExpression") or {}) == want:
+        return
+    if current:
+        await _drop_index_if_present(coll, name)
+    try:
+        await coll.create_index(field, name=name, unique=True, partialFilterExpression=want)
+    except OperationFailure:
+        # Lost a race to another instance creating the same index: fine if
+        # what exists now is what we wanted, otherwise a real failure.
+        current = (await coll.index_information()).get(name) or {}
+        if dict(current.get("partialFilterExpression") or {}) != want:
+            raise
+
+
 async def ensure_indexes() -> None:
-    await db.users.create_index("email", unique=True)
+    # Unique only where present: accounts are phone-first, so many have no
+    # email (and most email accounts have no phone). A plain unique index
+    # treats every missing value as the same null and allows exactly ONE
+    # account without the field - the second phone-only sign-up would fail.
+    await _ensure_unique_when_present(db.users, "email")
+    await _ensure_unique_when_present(db.users, "phone")
     await db.users.create_index("user_id", unique=True)
     await db.users.create_index("apple_sub", unique=True, sparse=True)
     await db.user_sessions.create_index("session_token", unique=True)
@@ -204,7 +245,11 @@ async def ensure_indexes() -> None:
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     # Sign-in codes: one live per address, and gone on their own once
     # expired - claim_code checks expiry itself, this just stops them piling up.
-    await db.otp_codes.create_index("email", unique=True)
+    # Codes are keyed by `identifier` - a lowercased email or an E.164
+    # phone. An earlier build keyed them by `email`; that index has to go,
+    # or every phone code (no email field) collides on null with the next.
+    await _drop_index_if_present(db.otp_codes, "email_1")
+    await db.otp_codes.create_index("identifier", unique=True)
     await db.otp_codes.create_index("expires_at", expireAfterSeconds=0)
     await db.businesses.create_index("business_id", unique=True)
     # Sparse: a doc is briefly slug-less between insert and backfill.

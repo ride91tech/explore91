@@ -81,7 +81,7 @@ def _cleanup(email: str) -> None:
         if row:
             await _drop("user_sessions", {"user_id": row["user_id"]})
             await _drop("users", {"user_id": row["user_id"]})
-        await _drop("otp_codes", {"email": email})
+        await _drop("otp_codes", {"identifier": email})
     _run(go())
 
 
@@ -201,7 +201,7 @@ class TestCodeSecurity:
             with TestClient(app.app) as c:
                 _send(c, email)
             code = inbox[email]
-            row = _run(_find("otp_codes", {"email": email}))
+            row = _run(_find("otp_codes", {"identifier": email}))
             assert code not in str(row), "the code is stored in plain text"
             plain = hashlib.sha256(f"{email}:{code}".encode()).hexdigest()
             assert row["code_digest"] != plain, \
@@ -253,7 +253,7 @@ class TestCodeSecurity:
             with TestClient(app.app) as c:
                 _send(c, email)
                 code = inbox[email]
-                _run(_update("otp_codes", {"email": email},
+                _run(_update("otp_codes", {"identifier": email},
                              {"expires_at": datetime.now(timezone.utc) - timedelta(seconds=1)}))
                 assert _verify(c, email, code).status_code == 400
         finally:
@@ -309,7 +309,7 @@ class TestCodeSecurity:
             results = _run(go())
             assert results.count(True) == 1, f"code claimed {results.count(True)} times"
         finally:
-            _run(_drop("otp_codes", {"email": email}))
+            _run(_drop("otp_codes", {"identifier": email}))
 
     def test_malformed_codes_never_reach_the_database(self, app, inbox):
         """Rejected by the model, so they cannot spend an attempt."""
@@ -319,7 +319,7 @@ class TestCodeSecurity:
                 _send(c, email)
                 for bad in ("12345", "1234567", "12a456", ""):
                     assert _verify(c, email, bad).status_code == 422
-                row = _run(_find("otp_codes", {"email": email}))
+                row = _run(_find("otp_codes", {"identifier": email}))
                 assert row["attempts"] == 0, "a malformed code spent an attempt"
         finally:
             _cleanup(email)
@@ -657,3 +657,219 @@ class TestWhatsApp:
     def test_indian_mobiles_normalise_and_others_are_refused(self, raw, expected):
         import core.otp as otp
         assert otp.normalise_in_mobile(raw) == expected
+
+
+# ------------------------------------------------------------ phone sign-in --
+
+def _phone() -> str:
+    """A random valid Indian mobile, ten digits starting 9."""
+    return "9" + "".join(str(random.randint(0, 9)) for _ in range(9))
+
+
+def _cleanup_phone(digits: str) -> None:
+    e164 = "+91" + digits
+
+    async def go():
+        row = await _find("users", {"phone": e164})
+        if row:
+            await _drop("user_sessions", {"user_id": row["user_id"]})
+            await _drop("tickets", {"user_id": row["user_id"]})
+            await _drop("users", {"user_id": row["user_id"]})
+        await _drop("otp_codes", {"identifier": e164})
+    _run(go())
+
+
+@pytest.fixture
+def phone_inbox(monkeypatch):
+    """WhatsApp configured, with every sent code captured instead of sent."""
+    _kapso_env(monkeypatch)
+    monkeypatch.delenv("K_SERVICE", raising=False)
+    import core.otp as otp
+    sent: dict = {}
+
+    async def capture(phone, code):
+        sent[phone] = code
+
+    monkeypatch.setattr(otp, "send_code_whatsapp", capture)
+    return sent
+
+
+@pytest.fixture
+def phone_app(phone_inbox):
+    return _load_app(f"explore91_server_phone_{uuid.uuid4().hex[:6]}")
+
+
+def _psend(c, phone):
+    return c.post("/api/auth/otp/phone/send", json={"phone": phone}, headers=_fresh())
+
+
+def _pverify(c, phone, code, is_adult=True, name=None):
+    body = {"phone": phone, "code": code, "is_adult": is_adult}
+    if name:
+        body["name"] = name
+    return c.post("/api/auth/otp/phone/verify", json=body, headers=_fresh())
+
+
+class TestPhoneSignIn:
+    def test_a_new_number_creates_a_phone_only_account(self, phone_app, phone_inbox):
+        d = _phone()
+        try:
+            with TestClient(phone_app.app) as c:
+                assert _psend(c, d).status_code == 202
+                r = _pverify(c, d, phone_inbox["+91" + d])
+                assert r.status_code == 200, r.text
+                token = r.json()["session_token"]
+                me = c.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+                assert me.status_code == 200, "a phone-only account broke /auth/me"
+                assert me.json()["phone"] == "+91" + d
+                assert me.json()["email"] is None
+            row = _run(_find("users", {"phone": "+91" + d}))
+            assert "email" not in row, \
+                "email must be ABSENT, not null, or the unique-when-present index matches it"
+            assert (row.get("consent") or {}).get("notice_version")
+        finally:
+            _cleanup_phone(d)
+
+    def test_the_number_is_never_the_default_display_name(self, phone_app, phone_inbox):
+        """Display names are public on reviews."""
+        d = _phone()
+        try:
+            with TestClient(phone_app.app) as c:
+                _psend(c, d)
+                r = _pverify(c, d, phone_inbox["+91" + d])
+            name = r.json()["user"]["name"]
+            assert d not in name and d[-4:] not in name, f"number leaked into name {name!r}"
+        finally:
+            _cleanup_phone(d)
+
+    def test_two_phone_only_accounts_can_coexist(self, phone_app, phone_inbox):
+        """The plain unique index on email allowed exactly one account with
+        no email. This is the case the index migration exists for."""
+        a, b = _phone(), _phone()
+        try:
+            with TestClient(phone_app.app) as c:
+                for d in (a, b):
+                    _psend(c, d)
+                    assert _pverify(c, d, phone_inbox["+91" + d]).status_code == 200
+            ua = _run(_find("users", {"phone": "+91" + a}))
+            ub = _run(_find("users", {"phone": "+91" + b}))
+            assert ua and ub and ua["user_id"] != ub["user_id"]
+        finally:
+            _cleanup_phone(a)
+            _cleanup_phone(b)
+
+    def test_however_it_is_typed_it_is_the_same_account(self, phone_app, phone_inbox):
+        d = _phone()
+        spaced = "+91 " + d[:5] + " " + d[5:]
+        try:
+            with TestClient(phone_app.app) as c:
+                _psend(c, spaced)
+                first = _pverify(c, spaced, phone_inbox["+91" + d]).json()
+                _psend(c, "0" + d)
+                second = _pverify(c, "0" + d, phone_inbox["+91" + d]).json()
+            assert first["user"]["user_id"] == second["user"]["user_id"], \
+                "two spellings of one number made two accounts"
+        finally:
+            _cleanup_phone(d)
+
+    def test_an_invalid_number_is_refused_before_anything_is_sent(self, phone_app, phone_inbox):
+        with TestClient(phone_app.app) as c:
+            assert _psend(c, "5876543210").status_code == 422
+            assert _psend(c, "+1 415 555 0100").status_code == 422
+        assert phone_inbox == {}, "a code was sent to an invalid number"
+
+    def test_verifying_an_invalid_number_looks_like_any_other_failure(self, phone_app, phone_inbox):
+        with TestClient(phone_app.app) as c:
+            bad = _pverify(c, "5876543210", "123456")
+            wrong = _pverify(c, _phone(), "123456")
+        assert bad.status_code == wrong.status_code == 400
+        assert bad.json() == wrong.json()
+
+    def test_a_new_number_still_needs_the_adult_confirmation(self, phone_app, phone_inbox):
+        d = _phone()
+        try:
+            with TestClient(phone_app.app) as c:
+                _psend(c, d)
+                assert _pverify(c, d, phone_inbox["+91" + d], is_adult=False).status_code == 403
+            assert _run(_find("users", {"phone": "+91" + d})) is None
+        finally:
+            _cleanup_phone(d)
+
+    def test_one_number_cannot_be_flooded(self, phone_app, phone_inbox):
+        d = _phone()
+        try:
+            with TestClient(phone_app.app) as c:
+                codes = [_psend(c, d).status_code for _ in range(6)]
+            assert codes[:5] == [202] * 5 and codes[5] == 429
+        finally:
+            _cleanup_phone(d)
+            _run(_drop("rate_limits", {"_id": {"$regex": "^otp_send_phone:p:.91" + d}}))
+
+    def test_unconfigured_is_503(self, monkeypatch):
+        monkeypatch.setenv("KAPSO_API_KEY", "")
+        app = _load_app(f"explore91_server_phone_off_{uuid.uuid4().hex[:6]}")
+        with TestClient(app.app) as c:
+            assert _psend(c, _phone()).status_code == 503
+
+    def test_a_phone_only_account_can_contact_support(self, phone_app, phone_inbox):
+        """tickets.py read current["email"] - a KeyError, so a 500, for every
+        phone-only user who asked for help."""
+        d = _phone()
+        try:
+            with TestClient(phone_app.app) as c:
+                _psend(c, d)
+                tok = _pverify(c, d, phone_inbox["+91" + d]).json()["session_token"]
+                r = c.post("/api/tickets", json={"subject": "Help", "message": "Hi"},
+                           headers={"Authorization": f"Bearer {tok}"})
+                assert r.status_code in (200, 201), f"{r.status_code}: {r.text}"
+        finally:
+            _cleanup_phone(d)
+
+    def test_erasing_a_phone_account_frees_the_number(self, phone_app, phone_inbox):
+        d = _phone()
+        try:
+            with TestClient(phone_app.app) as c:
+                _psend(c, d)
+                first = _pverify(c, d, phone_inbox["+91" + d]).json()
+                r = c.delete("/api/auth/me",
+                             headers={"Authorization": f"Bearer {first['session_token']}"})
+                assert r.status_code == 200
+                assert _run(_find("users", {"phone": "+91" + d})) is None
+                _psend(c, d)
+                second = _pverify(c, d, phone_inbox["+91" + d]).json()
+            assert second["user"]["user_id"] != first["user"]["user_id"]
+        finally:
+            _cleanup_phone(d)
+
+
+class TestMethods:
+    def test_reports_only_what_is_configured(self, monkeypatch):
+        monkeypatch.setenv("OTP_EMAIL_BACKEND", "log")
+        monkeypatch.setenv("OTP_PEPPER", PEPPER)
+        monkeypatch.delenv("K_SERVICE", raising=False)
+        monkeypatch.setenv("KAPSO_API_KEY", "")
+        app = _load_app(f"explore91_server_methods_{uuid.uuid4().hex[:6]}")
+        with TestClient(app.app) as c:
+            assert c.get("/api/auth/methods").json() == {"phone": False, "email": True}
+        _kapso_env(monkeypatch)
+        with TestClient(app.app) as c:
+            assert c.get("/api/auth/methods").json() == {"phone": True, "email": True}
+
+
+class TestPhoneLogBackend:
+    def test_works_locally(self, monkeypatch):
+        import core.otp as otp
+        monkeypatch.setenv("OTP_PHONE_BACKEND", "log")
+        monkeypatch.setenv("OTP_PEPPER", PEPPER)
+        monkeypatch.delenv("K_SERVICE", raising=False)
+        assert otp.whatsapp_configured() is True
+
+    def test_refuses_to_run_on_cloud_run(self, monkeypatch):
+        """It writes live codes to the log."""
+        import core.otp as otp
+        monkeypatch.setenv("OTP_PHONE_BACKEND", "log")
+        monkeypatch.setenv("OTP_PEPPER", PEPPER)
+        monkeypatch.setenv("K_SERVICE", "explore91-api")
+        assert otp.whatsapp_configured() is False
+        with pytest.raises(otp.OtpNotConfigured):
+            _run(otp.send_code_whatsapp("+919876543210", "482913"))

@@ -81,16 +81,27 @@ def backfill_fields(
 ) -> Dict[str, Any]:
     """Fields to `$set` on a returning user, or `{}` to leave them alone.
 
-    Only fills a genuine gap. An account that already carries consent keeps
-    the grant it has: the first affirmative action is the record, and
-    silently restamping it on every sign-in would destroy the timestamp that
-    makes the record worth keeping.
+    Two cases record consent, and one deliberately does not:
+
+    - No consent on record (accounts predating this work): record it.
+    - Consent on record, but against an OLDER notice: the user just ticked
+      the box beside the CURRENT notice to sign in, so record the new grant.
+      The notice promises that a material change is agreed to rather than
+      quietly replaced, and without this nothing ever re-asked anyone. The
+      earlier grant is kept in `consent_history`, never overwritten.
+    - Consent on record against the CURRENT notice: leave it. Restamping
+      `granted_at` on every sign-in would destroy the timestamp that makes
+      the record worth keeping.
 
     Returns `{}` when the client sent no affirmative signal, so a legacy app
     build cannot manufacture consent for a user who was never asked.
     """
-    if not existing or existing.get("consent"):
+    if not existing or not is_adult:
         return {}
-    if not is_adult:
+    current = existing.get("consent")
+    if current and current.get("notice_version") == PRIVACY_NOTICE_VERSION:
         return {}
-    return consent_fields(is_adult, now)
+    fields = consent_fields(is_adult, now)
+    if current:
+        fields["consent_history"] = list(existing.get("consent_history") or []) + [current]
+    return fields
