@@ -1,9 +1,19 @@
-// Native map view — used on iOS/Android. Web falls back to MapView.web.tsx.
+// Native map view — used on iOS/Android. Web falls back to MapPane.web.tsx.
 import React from "react";
-import { View, StyleSheet, Text, Pressable } from "react-native";
+import { View, StyleSheet, Text, Pressable, Platform } from "react-native";
+import Constants from "expo-constants";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { Business } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
+import { MapPane as PlaceList } from "./MapPane.web";
+
+/**
+ * Android draws this map with Google Maps, whose SDK crashes the whole app
+ * when MapView mounts without an API key in the manifest. app.config.js
+ * records whether the build had one; without it, show the places as a list.
+ */
+const MAP_AVAILABLE =
+  Platform.OS !== "android" || Constants.expoConfig?.extra?.androidMapsKeyConfigured === true;
 
 type Props = {
   businesses: Business[];
@@ -20,6 +30,16 @@ const CITY_CENTER: Record<string, { lat: number; lng: number }> = {
 export function MapPane({ businesses, onSelect, city }: Props) {
   const center = CITY_CENTER[city.toLowerCase()] ?? { lat: 15.3, lng: 74.1 };
   const [selected, setSelected] = React.useState<Business | null>(null);
+  if (!MAP_AVAILABLE) {
+    return (
+      <PlaceList
+        businesses={businesses}
+        onSelect={onSelect}
+        city={city}
+        notice={`The map isn't available in this version. Showing ${businesses.length} places in ${city}.`}
+      />
+    );
+  }
   return (
     <View style={{ flex: 1 }}>
       <MapView

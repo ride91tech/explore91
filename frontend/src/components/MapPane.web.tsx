@@ -1,4 +1,5 @@
-// Web fallback — react-native-maps doesn't render on Expo web.
+// Web fallback — react-native-maps doesn't render on Expo web. The native
+// MapPane also uses this list when an Android build has no Google Maps key.
 import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
@@ -9,15 +10,17 @@ type Props = {
   businesses: Business[];
   onSelect?: (b: Business) => void;
   city: string;
+  /** Replaces the header line; the web default points people to the app. */
+  notice?: string;
 };
 
-export function MapPane({ businesses, onSelect, city }: Props) {
+export function MapPane({ businesses, onSelect, city, notice }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
         <Ionicons name="map-outline" size={24} color={colors.onSurfaceTertiary} />
         <Text style={styles.headerText}>
-          Interactive map is available on the mobile app. Showing {businesses.length} places in {city}.
+          {notice ?? `Interactive map is available on the mobile app. Showing ${businesses.length} places in ${city}.`}
         </Text>
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}>
