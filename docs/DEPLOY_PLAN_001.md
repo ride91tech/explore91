@@ -127,8 +127,12 @@ traffic in steps.
 
 ```bash
 # 0. Capture what is serving NOW. This is the rollback target; write it down.
+#    Read the row with PERCENT 100 - a tagged revision also appears here, at
+#    no traffic. (An earlier version of this step printed every entry joined
+#    by semicolons, which is not a revision name and not a rollback target.)
 gcloud.cmd run services describe explore91-api --project explore91 \
-  --region asia-south1 --format="value(status.traffic.revisionName)"
+  --region asia-south1 --flatten="status.traffic[]" \
+  --format="table(status.traffic.revisionName, status.traffic.percent, status.traffic.tag)"
 
 # 1. Build and deploy, serving nothing yet. No env flags - see above.
 gcloud.cmd run deploy explore91-api --source backend --project explore91 \
@@ -147,6 +151,10 @@ gcloud.cmd run services update-traffic explore91-api --project explore91 \
 # 4. 100% once clean.
 gcloud.cmd run services update-traffic explore91-api --project explore91 \
   --region asia-south1 --to-latest
+
+# 5. Re-read step 0 and confirm the serving revision is the one you just
+#    deployed. Do not trust the output of step 4: it prints the desired
+#    state mid-transition, which reads as success either way.
 ```
 
 > **`gcloud.cmd`, not `gcloud`.** PowerShell's execution policy is
