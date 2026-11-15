@@ -51,13 +51,16 @@ CODE_TTL = timedelta(minutes=10)
 MAX_ATTEMPTS = 5
 
 # Sending backends:
+#   msg91   real delivery via MSG91's email API. The default choice: the
+#           account already exists, and MSG91 is also the route to SMS once
+#           DLT registration is approved.
 #   resend  real delivery via the Resend HTTP API
 #   log     writes the code to the server log. Local development only - it
 #           puts a live credential in a log, so it refuses to run when
 #           K_SERVICE is set (Cloud Run sets it on every revision).
 # Unset means OTP is off and the endpoints answer 503, the same way Apple
 # sign-in does when APPLE_AUDIENCES is unset.
-_BACKENDS = {"resend", "log"}
+_BACKENDS = {"msg91", "resend", "log"}
 
 
 class OtpNotConfigured(RuntimeError):
@@ -88,6 +91,8 @@ def otp_configured() -> bool:
     if backend == "resend" and not (
         os.environ.get("RESEND_API_KEY") and os.environ.get("OTP_FROM_EMAIL")
     ):
+        return False
+    if backend == "msg91" and not all(os.environ.get(k) for k in _MSG91_REQUIRED):
         return False
     try:
         _pepper()
@@ -169,6 +174,45 @@ def _render(code: str) -> tuple:
     return subject, text
 
 
+_MSG91_REQUIRED = (
+    "MSG91_AUTHKEY", "MSG91_EMAIL_DOMAIN", "MSG91_EMAIL_TEMPLATE_ID", "OTP_FROM_EMAIL",
+)
+_MSG91_EMAIL_URL = "https://control.msg91.com/api/v5/email/send"
+
+
+def _http_client() -> httpx.AsyncClient:
+    """Module-level so tests can substitute a mock transport."""
+    return httpx.AsyncClient(timeout=10)
+
+
+def _split_from(value: str) -> tuple:
+    """'Explore91 <login@explore91.com>' -> ('Explore91', 'login@explore91.com').
+
+    MSG91 wants the sender as an object; Resend takes the combined string.
+    One variable serves both.
+    """
+    value = value.strip()
+    if "<" in value and value.endswith(">"):
+        name, _, addr = value[:-1].partition("<")
+        return name.strip().strip('"'), addr.strip()
+    return "Explore91", value
+
+
+def _msg91_accepted(status_code: int, body) -> bool:
+    """Whether MSG91 actually queued the email.
+
+    The HTTP status is not enough. MSG91 answers some failures - a wrong or
+    missing authkey among them - with a 200 and the failure in the body, so
+    checking the status alone would report a code as sent when nothing will
+    ever arrive. Success is a 2xx AND status "success" AND hasError false,
+    which is the shape its OpenAPI spec documents for a queued message.
+    Anything else is a failure, including a body that will not parse.
+    """
+    if not (200 <= status_code < 300) or not isinstance(body, dict):
+        return False
+    return body.get("status") == "success" and body.get("hasError") is False
+
+
 async def send_code_email(to: str, code: str) -> None:
     """Deliver a code. Module-level so tests can replace it."""
     backend = _backend()
@@ -179,7 +223,7 @@ async def send_code_email(to: str, code: str) -> None:
         return
     if backend == "resend":
         subject, text = _render(code)
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with _http_client() as client:
             r = await client.post(
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {os.environ['RESEND_API_KEY']}"},
@@ -193,6 +237,37 @@ async def send_code_email(to: str, code: str) -> None:
         if r.status_code >= 300:
             # The body can echo the recipient; log the status only.
             logger.error("Resend rejected an OTP email: HTTP %s", r.status_code)
+            raise RuntimeError("email delivery failed")
+        return
+    if backend == "msg91":
+        name, addr = _split_from(os.environ["OTP_FROM_EMAIL"])
+        payload = {
+            "recipients": [{"to": [{"email": to}], "variables": {"otp": code}}],
+            "from": {"name": name, "email": addr},
+            "domain": os.environ["MSG91_EMAIL_DOMAIN"],
+            "template_id": os.environ["MSG91_EMAIL_TEMPLATE_ID"],
+        }
+        async with _http_client() as client:
+            r = await client.post(
+                _MSG91_EMAIL_URL,
+                headers={
+                    "authkey": os.environ["MSG91_AUTHKEY"],
+                    "accept": "application/json",
+                    "content-type": "application/json",
+                },
+                json=payload,
+            )
+        try:
+            body = r.json()
+        except ValueError:
+            body = None
+        if not _msg91_accepted(r.status_code, body):
+            # Status and MSG91's own status word only: the body can echo the
+            # recipient, and the authkey must never reach a log.
+            logger.error(
+                "MSG91 did not accept an OTP email: HTTP %s, status=%r",
+                r.status_code, (body or {}).get("status") if isinstance(body, dict) else None,
+            )
             raise RuntimeError("email delivery failed")
         return
     raise OtpNotConfigured("OTP_EMAIL_BACKEND is unset")

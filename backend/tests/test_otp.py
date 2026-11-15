@@ -392,3 +392,149 @@ class TestBackendGuards:
         monkeypatch.setenv("RESEND_API_KEY", "")
         import core.otp as otp
         assert otp.otp_configured() is False
+
+
+# ------------------------------------------------------------------ MSG91 --
+
+MSG91_ENV = {
+    "OTP_EMAIL_BACKEND": "msg91",
+    "OTP_PEPPER": PEPPER,
+    "MSG91_AUTHKEY": "test-authkey-not-real-0123456789",
+    "MSG91_EMAIL_DOMAIN": "mail.explore91.com",
+    "MSG91_EMAIL_TEMPLATE_ID": "explore91_otp",
+    "OTP_FROM_EMAIL": "Explore91 <login@mail.explore91.com>",
+}
+
+MSG91_OK = {
+    "status": "success", "hasError": False, "errors": {},
+    "data": {"unique_id": "a1d2e4b8-4d04-41f9-b8f2-34be6a5c6d49"},
+    "message": "Thank you. Your request has been queued.",
+}
+
+
+def _msg91_env(monkeypatch, **overrides):
+    for k, v in {**MSG91_ENV, **overrides}.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.delenv("K_SERVICE", raising=False)
+
+
+def _mock_msg91(monkeypatch, status=200, body=None, raw=None):
+    """Route the module's HTTP client to a canned MSG91 answer, recording
+    what was sent."""
+    import httpx
+    import core.otp as otp
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        seen["headers"] = dict(request.headers)
+        seen["json"] = __import__("json").loads(request.content)
+        if raw is not None:
+            return httpx.Response(status, content=raw)
+        return httpx.Response(status, json=body if body is not None else MSG91_OK)
+
+    monkeypatch.setattr(otp, "_http_client",
+                        lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    return seen
+
+
+class TestMsg91:
+    def test_configured_only_with_every_setting(self, monkeypatch):
+        import core.otp as otp
+        _msg91_env(monkeypatch)
+        assert otp.otp_configured() is True
+        for missing in ("MSG91_AUTHKEY", "MSG91_EMAIL_DOMAIN",
+                        "MSG91_EMAIL_TEMPLATE_ID", "OTP_FROM_EMAIL"):
+            monkeypatch.setenv(missing, "")
+            assert otp.otp_configured() is False, f"configured without {missing}"
+            monkeypatch.setenv(missing, MSG91_ENV[missing])
+
+    def test_sends_the_code_in_the_shape_msg91_expects(self, monkeypatch):
+        import core.otp as otp
+        _msg91_env(monkeypatch)
+        seen = _mock_msg91(monkeypatch)
+        _run(otp.send_code_email("someone@example.com", "482913"))
+        assert seen["url"] == "https://control.msg91.com/api/v5/email/send"
+        assert seen["headers"]["authkey"] == MSG91_ENV["MSG91_AUTHKEY"]
+        body = seen["json"]
+        assert body["recipients"][0]["to"][0]["email"] == "someone@example.com"
+        assert body["recipients"][0]["variables"]["otp"] == "482913"
+        assert body["from"] == {"name": "Explore91", "email": "login@mail.explore91.com"}
+        assert body["domain"] == "mail.explore91.com"
+        assert body["template_id"] == "explore91_otp"
+
+    def test_a_200_carrying_a_failure_is_a_failure(self, monkeypatch):
+        """The trap. MSG91 answers some failures with HTTP 200 and the
+        failure in the body. Checking the status alone would tell the user a
+        code was sent when nothing will ever arrive."""
+        import core.otp as otp
+        _msg91_env(monkeypatch)
+        _mock_msg91(monkeypatch, 200, {"status": "fail", "hasError": True,
+                                       "errors": {"template_id": ["invalid"]}})
+        with pytest.raises(RuntimeError):
+            _run(otp.send_code_email("someone@example.com", "482913"))
+
+    def test_a_bad_authkey_answered_with_200_is_a_failure(self, monkeypatch):
+        import core.otp as otp
+        _msg91_env(monkeypatch)
+        _mock_msg91(monkeypatch, 200, {"code": "401", "errors": "Unauthorized",
+                                       "status": "fail", "apiError": None, "hasError": True})
+        with pytest.raises(RuntimeError):
+            _run(otp.send_code_email("someone@example.com", "482913"))
+
+    @pytest.mark.parametrize("status,raw", [(200, b"<html>gateway</html>"),
+                                            (200, b""), (500, None), (401, None)])
+    def test_anything_short_of_a_clear_success_is_a_failure(self, monkeypatch, status, raw):
+        import core.otp as otp
+        _msg91_env(monkeypatch)
+        _mock_msg91(monkeypatch, status, body={"status": "fail", "hasError": True}, raw=raw)
+        with pytest.raises(RuntimeError):
+            _run(otp.send_code_email("someone@example.com", "482913"))
+
+    def test_the_authkey_never_reaches_the_log(self, monkeypatch, caplog):
+        import logging
+        import core.otp as otp
+        _msg91_env(monkeypatch)
+        _mock_msg91(monkeypatch, 200, {"status": "fail", "hasError": True})
+        with caplog.at_level(logging.DEBUG, logger="explore91.otp"):
+            with pytest.raises(RuntimeError):
+                _run(otp.send_code_email("someone@example.com", "482913"))
+        assert MSG91_ENV["MSG91_AUTHKEY"] not in caplog.text
+        assert "482913" not in caplog.text, "the code was logged"
+
+    def test_the_route_reports_failure_instead_of_claiming_sent(self, monkeypatch):
+        """End to end: a 200-with-failure from MSG91 must surface as a 502 to
+        the app, not a 202 that leaves the person waiting for nothing."""
+        _msg91_env(monkeypatch)
+        _mock_msg91(monkeypatch, 200, {"status": "fail", "hasError": True})
+        app = _load_app(f"explore91_server_msg91_{uuid.uuid4().hex[:6]}")
+        email = _email("msg91fail")
+        try:
+            with TestClient(app.app) as c:
+                assert _send(c, email).status_code == 502
+        finally:
+            _cleanup(email)
+
+    def test_the_route_sends_and_then_signs_in(self, monkeypatch):
+        _msg91_env(monkeypatch)
+        seen = _mock_msg91(monkeypatch)
+        app = _load_app(f"explore91_server_msg91_{uuid.uuid4().hex[:6]}")
+        email = _email("msg91ok")
+        try:
+            with TestClient(app.app) as c:
+                assert _send(c, email).status_code == 202
+                code = seen["json"]["recipients"][0]["variables"]["otp"]
+                r = _verify(c, email, code)
+                assert r.status_code == 200, r.text
+                assert r.json()["session_token"].startswith("otp_")
+        finally:
+            _cleanup(email)
+
+    @pytest.mark.parametrize("value,expected", [
+        ("Explore91 <login@explore91.com>", ("Explore91", "login@explore91.com")),
+        ('"Explore 91" <a@b.co>', ("Explore 91", "a@b.co")),
+        ("login@explore91.com", ("Explore91", "login@explore91.com")),
+    ])
+    def test_the_sender_string_splits_into_name_and_address(self, value, expected):
+        import core.otp as otp
+        assert otp._split_from(value) == expected

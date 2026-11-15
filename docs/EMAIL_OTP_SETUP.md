@@ -1,6 +1,6 @@
 # Turning on email sign-in codes
 
-**Status:** built and tested, not live. The backend endpoints, both sign-in
+**Status:** built and tested, not live. Delivery is through MSG91. The backend endpoints, both sign-in
 screens and the tests are in `main`. Nothing below has been done in
 production yet.
 
@@ -29,50 +29,80 @@ locked operators out of their own console.
 
 ---
 
-## 1. A domain that can send
+## 1. A domain that can send — MSG91
 
-Codes are sent through [Resend](https://resend.com). It was chosen because its
-API is one HTTP call; the sender lives in one function in `core/otp.py`, so
-swapping to SES, Postmark or SendGrid later is a small change.
+Codes are delivered through **MSG91's email API**, since the account already
+exists and MSG91 is also the route to SMS once DLT is approved (§7). Resend is
+still supported as a fallback backend; nothing else changes if you switch.
 
-1. Create a Resend account and add the domain `explore91.com`.
-2. Resend shows DNS records — SPF, DKIM and usually an MX for bounces. Add
-   them at **GoDaddy**, on the `explore91.com` zone. This is the zone with
-   `ns35`/`ns36` nameservers, not `ride91.com`.
-3. Wait for Resend to show the domain as verified.
+Explore91 still generates and checks every code itself. MSG91 only delivers
+the message. Its own SendOTP product would generate and verify codes on its
+side, which would bypass the protections listed at the end of this document
+and their tests, so it is deliberately not used.
 
-Until the domain verifies, Resend will not send from an `@explore91.com`
-address, so a send that fails at this stage is a DNS problem rather than a code
-problem. Check the domain's status in Resend before debugging anything else.
+**Send from a subdomain, not `explore91.com`.** Use `mail.explore91.com`.
+MSG91's verification adds MX records, and on the root domain those would claim
+`@explore91.com` mail for MSG91 — the domain you will want for real mailboxes,
+starting with the privacy contact (see the warning below).
 
-The zone currently has no MX records, so nothing about existing mail can be
-disturbed by adding these.
+1. In MSG91: **Email → Domains → add `mail.explore91.com`**.
+2. MSG91 shows TXT and MX records. Add them at **GoDaddy** on the
+   **explore91.com** zone (`ns35`/`ns36`), with names under `mail`.
+3. Wait for MSG91 to show the domain verified.
+4. **Email → Templates → create a template** whose body uses a variable named
+   exactly **`otp`**, and note its **template ID**. Suggested text:
+   *"Your Explore91 sign-in code is {otp}. It expires in 10 minutes and works
+   once. If you didn't ask for this, ignore this email — nobody can sign in
+   without the code."* Use MSG91's own variable syntax for `otp`.
+
+> **MSG91 can answer a failure with HTTP 200.** A wrong authkey, among other
+> errors, comes back as a 200 with the failure in the body. The code treats a
+> send as successful only when the body says `status: "success"` and
+> `hasError: false`; anything else becomes a 502 to the app. There is a test
+> for exactly this, and swapping in a status-code-only check fails four of
+> them.
+
+> **`privacy@explore91.com` does not receive mail.** `explore91.com` has no MX
+> records, so anything sent there bounces — and the privacy notice publishes
+> it as the grievance contact, which DPDP s13 requires to work. Not fixed
+> here, because it needs a decision: either add `explore91.com` to the Google
+> Workspace that already runs `ride91.com` mail, or change the published
+> address (`PRIVACY_CONTACT_EMAIL`, and the text in `app/privacy.tsx`) to one
+> that already works.
 
 ## 2. Secrets and config
 
-Four values. Two are secrets and go in Secret Manager, the same way
+Two of these are secrets and belong in Secret Manager, the same way
 `MONGO_URL` already does (as `explore91-mongo-url`). **Do not paste either
-secret into chat, a ticket or a commit.**
+into chat, a ticket or a commit.**
 
 | Variable | What | Where |
 |---|---|---|
-| `OTP_PEPPER` | 48+ random characters. Keys the stored code digests, so a database read cannot recover a live code | Secret Manager |
-| `RESEND_API_KEY` | From the Resend dashboard | Secret Manager |
-| `OTP_EMAIL_BACKEND` | `resend` | plain env |
-| `OTP_FROM_EMAIL` | `Explore91 <login@explore91.com>` | plain env |
+| `OTP_PEPPER` | 48+ random characters, **generated**. Keys the stored code digests so a database read cannot recover a live code | Secret Manager |
+| `MSG91_AUTHKEY` | MSG91 → Settings → Authkey | Secret Manager |
+| `OTP_EMAIL_BACKEND` | `msg91` | plain env |
+| `MSG91_EMAIL_DOMAIN` | `mail.explore91.com` — the verified domain | plain env |
+| `MSG91_EMAIL_TEMPLATE_ID` | the template ID from §1 step 4 | plain env |
+| `OTP_FROM_EMAIL` | `Explore91 <login@mail.explore91.com>` | plain env |
 
-The pepper must be **generated, not chosen**. 32 characters is the minimum the
-code accepts; anything shorter and sign-in reports itself unconfigured.
+32 characters is the minimum pepper the code accepts; anything shorter and
+sign-in reports itself unconfigured.
 
-The runtime service account is
-`597388632883-compute@developer.gserviceaccount.com`. It needs the
-**Secret Manager Secret Accessor** role on each new secret, exactly as it has
-on `explore91-mongo-url` — without it the revision fails to start.
+The runtime service account,
+`597388632883-compute@developer.gserviceaccount.com`, needs the **Secret
+Manager Secret Accessor** role on each new secret, as it has on
+`explore91-mongo-url`; without it the revision fails to start.
 
-`OTP_EMAIL_BACKEND=log` exists for local development only. It writes live codes
-to the log, so it refuses to run when `K_SERVICE` is set, which Cloud Run sets
-on every revision. Setting it in production does nothing except leave sign-in
-unconfigured.
+`OTP_EMAIL_BACKEND=log` is for local development only. It writes live codes to
+the log, so it refuses to run when `K_SERVICE` is set, which Cloud Run sets on
+every revision.
+
+<details>
+<summary>Using Resend instead</summary>
+
+Set `OTP_EMAIL_BACKEND=resend`, `RESEND_API_KEY` (Secret Manager) and
+`OTP_FROM_EMAIL`. The MSG91 variables are then ignored.
+</details>
 
 ## 3. Deploy the backend
 
@@ -93,8 +123,9 @@ New checks to add to the smoke on the tagged revision:
 
 Before anything user-facing changes, send a code to a real address you can
 read, from the tagged revision, and sign in with it. Check the email lands in
-the inbox and not spam. A Resend account that is not fully verified fails here
-quietly, and this is the last point where that costs nothing.
+the inbox and not spam. An unverified MSG91 domain or a template whose variable is not
+named `otp` fails here — the second one quietly, with an email that arrives
+without its code. This is the last point where finding out costs nothing.
 
 ## 5. Ship the clients
 
@@ -114,6 +145,15 @@ Only once real users are signing in with codes:
 - `POST /api/auth/dev` must then return **404**.
 
 This is roadmap step 0.1e.
+
+## 7. Phone numbers, later
+
+MSG91 is also how SMS will work, but sending OTP by SMS in India needs **DLT
+registration**: your entity, a sender ID (header) and the OTP message template,
+each approved, then linked in MSG91 as a flow. If that is already done in your
+MSG91 account, phone sign-in is mostly a client and identity change — the
+code generation, attempt limits and single-use guarantees here carry over
+unchanged. If not, it is the one-to-two-week clock described at the top.
 
 ---
 
