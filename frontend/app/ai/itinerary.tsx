@@ -12,7 +12,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { useAuth } from "@/src/auth";
+import { useCity } from "@/src/city";
 import { api, Business } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 import { ratingText } from "@/src/rating";
@@ -26,7 +26,7 @@ const INTERESTS = ["Food", "Nightlife", "Culture", "Wellness", "Adventure", "Sho
 export default function ItineraryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const city = useCity();
   const [days, setDays] = useState(2);
   const [interests, setInterests] = useState<string[]>([]);
   const [itin, setItin] = useState<Itinerary | null>(null);
@@ -43,7 +43,7 @@ export default function ItineraryScreen() {
       const r = await api<Itinerary>("/ai/itinerary", {
         method: "POST", auth: true,
         body: JSON.stringify({
-          city: (user?.home_city ?? "Goa").toLowerCase(),
+          city: city.slug,
           days,
           interests: interests.map((i) => i.toLowerCase()),
         }),
@@ -66,7 +66,7 @@ export default function ItineraryScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}>
         {itin === null ? (
           <>
-            <Text style={styles.h1}>Let me plan your trip to {user?.home_city ?? "your city"}.</Text>
+            <Text style={styles.h1}>Let me plan your trip to {city.name}.</Text>
             <Text style={styles.sub}>Pick your interests and I'll craft a day-by-day itinerary.</Text>
 
             <Text style={styles.sectionLabel}>Days</Text>

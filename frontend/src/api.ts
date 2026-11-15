@@ -159,6 +159,10 @@ export type CityT = {
   business_count?: number;
   reel_count?: number;
   is_live?: boolean;
+  /** The city's centre, used to pick the city nearest the device. Absent on
+   *  older APIs and on CMS cities added without coordinates. */
+  lat?: number;
+  lng?: number;
 };
 
 export type CityGroupT = { region: string; cities: CityT[] };

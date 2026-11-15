@@ -10,7 +10,7 @@ import {
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuth } from "@/src/auth";
+import { useCity } from "@/src/city";
 import { api, CityT, JourneyT } from "@/src/api";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, fonts, radius, shadow, spacing, text as tText, type as tType } from "@/src/theme";
@@ -30,7 +30,7 @@ import { colors, fonts, radius, shadow, spacing, text as tText, type as tType } 
 export default function Journey() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const city = useCity();
   const [journey, setJourney] = useState<JourneyT | null>(null);
   const [cityTotal, setCityTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,7 +91,7 @@ export default function Journey() {
           }}
         >
           <View>
-            <Text style={styles.city}>{user?.home_city ?? "Goa"}</Text>
+            <Text style={styles.city}>{city.name}</Text>
             <Text style={styles.counts}>
               {journey?.cities ?? 0} of {cityTotal ?? "—"} cities ·{" "}
               {journey?.states ?? 0} of {journey?.states_total ?? 28} states

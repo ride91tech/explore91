@@ -16,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useAuth } from "@/src/auth";
+import { useCity } from "@/src/city";
 import { api, Business, CategoryT, CityT } from "@/src/api";
 import { PlaceTile } from "@/src/components/PlaceTile";
 import { MapPane } from "@/src/components/MapPane";
@@ -42,7 +42,7 @@ type ViewMode = "browse" | "map";
 export default function Explore() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const current = useCity();
   const params = useLocalSearchParams<{ category?: string }>();
   const [q, setQ] = useState("");
   const [category, setCategory] = useState<string | null>(params.category ?? null);
@@ -54,8 +54,8 @@ export default function Explore() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const cityName = user?.home_city ?? "Goa";
-  const citySlug = cityName.toLowerCase();
+  const cityName = current.name;
+  const citySlug = current.slug;
 
   useEffect(() => {
     api<CategoryT[]>("/categories").then(setCategories).catch(() => {});

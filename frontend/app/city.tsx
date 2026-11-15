@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -13,6 +14,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
+import { useCity } from "@/src/city";
 import { api, CityT, CityGroupT } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
@@ -25,6 +27,7 @@ export default function CityPicker() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, refresh } = useAuth();
+  const city = useCity();
   const [groups, setGroups] = useState<CityGroupT[]>([]);
   const width = Dimensions.get("window").width;
 
@@ -48,40 +51,71 @@ export default function CityPicker() {
   }, [groups]);
 
   const pick = async (slug: string, name: string) => {
-    // Browsing is open now, so an anonymous visitor can reach this screen.
-    // A home city is stored on the account, so ask for one rather than
-    // failing silently into a console log.
-    if (!user) {
-      router.push("/login");
-      return;
+    // Anyone can pick a city now; it is remembered on the device and wins
+    // over location until "Use my current location". This used to send
+    // signed-out visitors to sign in, so they could only ever browse Goa.
+    await city.chooseCity(slug);
+    leave();
+    // A signed-in account still keeps its home city in step, as before.
+    if (user) {
+      api("/auth/me", { method: "PATCH", auth: true, body: JSON.stringify({ home_city: name }) })
+        .then(() => refresh())
+        .catch((e) => console.log("city pick", e));
     }
-    try {
-      await api("/auth/me", {
-        method: "PATCH", auth: true,
-        body: JSON.stringify({ home_city: name }),
-      });
-      await refresh();
-      router.back();
-    } catch (e) {
-      console.log("city pick", e);
-    }
+  };
+
+  // Opened directly (a typed URL, a refresh on the web) there is nothing to
+  // go back to, and router.back() silently did nothing: close and picking a
+  // city both left you stuck here.
+  const leave = () => (router.canGoBack() ? router.back() : router.replace("/(tabs)"));
+
+  const followLocation = async () => {
+    await city.useMyLocation();
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable onPress={() => router.back()} testID="close-city" style={styles.close}>
+        <Pressable onPress={leave} testID="close-city" style={styles.close}>
           <Ionicons name="close" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.title}>Choose your city</Text>
         <View style={{ width: 40 }} />
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: insets.bottom + 40 }}>
+        <Pressable
+          testID="city-use-location"
+          onPress={followLocation}
+          disabled={city.locating}
+          style={styles.locRow}
+        >
+          <Ionicons
+            name={city.source === "location" ? "navigate" : "navigate-outline"}
+            size={20}
+            color={colors.brandPrimary}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.locTitle}>
+              {city.source === "location" ? `Using your location · ${city.name}` : "Use my current location"}
+            </Text>
+            {city.locating ? (
+              <Text style={styles.locSub}>{"Finding the city you're in…"}</Text>
+            ) : city.locationUnavailable && city.source !== "location" ? (
+              <Text style={styles.locSub}>
+                Location is off or unavailable. Turn it on in your settings, or pick a city below.
+              </Text>
+            ) : city.note ? (
+              <Text style={styles.locSub}>{city.note}</Text>
+            ) : null}
+          </View>
+          {city.locating ? <ActivityIndicator color={colors.brandPrimary} /> : null}
+        </Pressable>
+
         {liveRegions.map((g) => (
           <View key={g.region} style={{ gap: spacing.md }}>
             <Text style={styles.regionHead}>{g.region}</Text>
             {g.cities.map((c) => {
-              const active = user?.home_city === c.name;
+              const active = city.slug === c.slug;
               return (
                 <Pressable
                   key={c.slug}
@@ -139,6 +173,18 @@ const styles = StyleSheet.create({
   close: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   title: { fontSize: tType.lg, fontFamily: fonts.display, color: colors.onSurface },
 
+  locRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  locTitle: { fontSize: tType.base, fontFamily: fonts.bodyBold, color: colors.onSurface },
+  locSub: { fontSize: tType.sm, color: colors.onSurfaceSecondary, marginTop: 2 },
   regionHead: {
     fontSize: tType.sm,
     fontFamily: fonts.bodyBold,

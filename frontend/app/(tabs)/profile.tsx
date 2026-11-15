@@ -14,6 +14,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/auth";
+import { useCity } from "@/src/city";
 import { api, Booking, Business, JourneyT } from "@/src/api";
 import { JourneyCard } from "@/src/components/JourneyCard";
 import {
@@ -40,6 +41,8 @@ export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut, refresh, deleteAccount } = useAuth();
+
+  const city = useCity();
   const [erasing, setErasing] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [saved, setSaved] = useState<Business[]>([]);
@@ -103,7 +106,7 @@ export default function Profile() {
             <View style={styles.cityRow}>
               <Ionicons name="location" size={12} color={colors.onSurfaceTertiary} />
               <Text style={styles.cityText} numberOfLines={1}>
-                Exploring {user?.home_city ?? "Goa"}
+                Exploring {city.name}
               </Text>
             </View>
           </View>
@@ -202,7 +205,7 @@ export default function Profile() {
           <SettingRow
             icon="location-outline"
             label="Change city"
-            hint={user?.home_city ?? "Goa"}
+            hint={city.name}
             onPress={() => router.push("/city")}
             testID="settings-city"
           />

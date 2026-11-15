@@ -23,6 +23,7 @@ import { api, InterestPlace, InterestStatus, ReelT } from "@/src/api";
 import { reelCta, mapsUrl } from "@/src/reelCta";
 import { placeUrl, shareContent } from "@/src/links";
 import { useAuth } from "@/src/auth";
+import { useCity } from "@/src/city";
 import { useToast } from "@/src/components/Toast";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
@@ -32,6 +33,7 @@ export default function ReelsFeed() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const city = useCity();
   const { show } = useToast();
   const { height, width } = Dimensions.get("window");
   const itemH = height - TAB_BAR;
@@ -47,7 +49,7 @@ export default function ReelsFeed() {
   // already flagged when a reel scrolls back into view.
   const [interest, setInterest] = useState<Record<string, InterestStatus>>({});
 
-  const cityLower = (user?.home_city ?? "Goa").toLowerCase();
+  const cityLower = city.slug;
 
   const load = useCallback(async () => {
     try {
@@ -209,7 +211,7 @@ export default function ReelsFeed() {
     return (
       <View style={[styles.loader, { padding: spacing.xl }]}>
         <Ionicons name="videocam-outline" size={48} color="rgba(255,255,255,0.7)" />
-        <Text style={styles.emptyTitle}>No reels yet in {user?.home_city ?? "Goa"}</Text>
+        <Text style={styles.emptyTitle}>No reels yet in {city.name}</Text>
         <Text style={styles.emptySub}>Come back soon — creators post new reels every day.</Text>
       </View>
     );
@@ -250,7 +252,7 @@ export default function ReelsFeed() {
 
       <View style={[styles.topBar, { top: insets.top + spacing.sm }]}>
         <Text style={styles.brand}>Reels</Text>
-        <Text style={styles.cityBadge}>{user?.home_city ?? "Goa"}</Text>
+        <Text style={styles.cityBadge}>{city.name}</Text>
       </View>
 
       {/* Topic rails. Built from what the city actually has, so a rail never

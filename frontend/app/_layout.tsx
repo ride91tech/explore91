@@ -10,6 +10,7 @@ import { StatusBar } from "expo-status-bar";
 import { useAppFonts } from "@/src/hooks/use-icon-fonts";
 import { colors } from "@/src/theme";
 import { AuthProvider, useAuth } from "@/src/auth";
+import { CityProvider } from "@/src/city";
 import { ToastHost } from "@/src/components/Toast";
 
 LogBox.ignoreAllLogs(true);
@@ -77,10 +78,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <ToastHost>
-            <StatusBar style="dark" />
-            <AuthGate />
-          </ToastHost>
+          <CityProvider>
+            <ToastHost>
+              <StatusBar style="dark" />
+              <AuthGate />
+            </ToastHost>
+          </CityProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

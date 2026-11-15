@@ -11,7 +11,7 @@ import {
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
-import { useAuth } from "@/src/auth";
+import { useCity } from "@/src/city";
 import { api, Business, InterestPlace, JourneyT } from "@/src/api";
 import { BusinessCard } from "@/src/components/BusinessCard";
 import { JourneyCard } from "@/src/components/JourneyCard";
@@ -37,7 +37,7 @@ const SEGMENTS: { key: Section; label: string; blurb: string }[] = [
 export default function Trips() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const city = useCity();
   const [section, setSection] = useState<Section>("saved");
   const [saved, setSaved] = useState<Business[]>([]);
   const [bucket, setBucket] = useState<InterestPlace[]>([]);
@@ -70,7 +70,7 @@ export default function Trips() {
         <Text style={styles.kicker}>Currently exploring</Text>
         <View style={styles.cityRow}>
           <Ionicons name="location" size={14} color={colors.brandPrimary} />
-          <Text style={styles.city}>{user?.home_city ?? "Goa"}</Text>
+          <Text style={styles.city}>{city.name}</Text>
         </View>
         <Text style={styles.title}>Your Trips</Text>
         <Text style={styles.sub}>Everything you've saved, planned and remembered.</Text>

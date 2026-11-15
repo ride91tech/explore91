@@ -15,6 +15,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth";
+import { useCity } from "@/src/city";
 import { api, Business, CategoryT, CityT } from "@/src/api";
 import { CategoryTile } from "@/src/components/CategoryTile";
 import type { IconName } from "@/src/icons";
@@ -25,6 +26,7 @@ export default function Discover() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const city = useCity();
   const [cities, setCities] = useState<CityT[]>([]);
   const [categories, setCategories] = useState<CategoryT[]>([]);
   const [featured, setFeatured] = useState<Business[]>([]);
@@ -33,8 +35,8 @@ export default function Discover() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const cityName = user?.home_city ?? "Goa";
-  const citySlug = cityName.toLowerCase();
+  const cityName = city.name;
+  const citySlug = city.slug;
   const heroCity = cities.find((c) => c.slug === citySlug);
 
   // The site puts a time-of-day kicker above the city name. Derived from the
@@ -138,6 +140,13 @@ export default function Discover() {
               <Text style={styles.heroMeta}>
                 {[heroCity.state, heroCity.region].filter(Boolean).join("  ·  ")}
               </Text>
+            ) : null}
+            {/* Set when the city came from location but isn't quite where
+                the person is: a nearby city that isn't live yet, or none. */}
+            {city.note ? (
+              <Pressable onPress={() => router.push("/city")} testID="city-note">
+                <Text style={styles.heroNote}>{city.note}</Text>
+              </Pressable>
             ) : null}
           </View>
         </View>
@@ -373,6 +382,18 @@ const styles = StyleSheet.create({
     fontSize: tType.sm,
     color: "rgba(255,255,255,0.62)",
     marginTop: spacing.sm,
+  },
+  heroNote: {
+    alignSelf: "flex-start",
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    overflow: "hidden",
+    backgroundColor: "rgba(0,0,0,0.38)",
+    color: "#FFF",
+    fontFamily: fonts.bodyMedium,
+    fontSize: tType.sm,
   },
 
   // Pulled up over the hero. The large top radius is the shape the site uses

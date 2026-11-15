@@ -64,6 +64,12 @@
         }
       ],
       "expo-video",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Explore91 uses your approximate location to open the city you're in. It isn't stored or shared."
+        }
+      ],
       "expo-font",
       "expo-image",
       "expo-secure-store",

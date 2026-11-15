@@ -16,7 +16,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { useAuth } from "@/src/auth";
+import { useCity } from "@/src/city";
 import { api, Business } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 import { ratingText } from "@/src/rating";
@@ -34,7 +34,7 @@ type Pick = { business: Business; reason: string };
 export default function AIConcierge() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const city = useCity();
   const [mood, setMood] = useState<string | null>(null);
   const [budget, setBudget] = useState<string | null>(null);
   const [party, setParty] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export default function AIConcierge() {
           mood: mood?.toLowerCase() ?? null,
           budget,
           party: party?.toLowerCase() ?? null,
-          city: (user?.home_city ?? "Goa").toLowerCase(),
+          city: city.slug,
         }),
       });
       setPicks(r.picks);
@@ -76,7 +76,7 @@ export default function AIConcierge() {
         {picks === null ? (
           <>
             <Text style={styles.h1}>Tell me what you're in the mood for.</Text>
-            <Text style={styles.sub}>I'll pick 5 places tailored to you, right now, in {user?.home_city ?? "your city"}.</Text>
+            <Text style={styles.sub}>I'll pick 5 places tailored to you, right now, in {city.name}.</Text>
 
             <Section title="Mood">
               <ChipRow options={MOODS} value={mood} onChange={setMood} testPrefix="mood" />
