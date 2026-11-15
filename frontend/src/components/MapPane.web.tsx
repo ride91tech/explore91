@@ -5,6 +5,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Business } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
+import { ratingText } from "@/src/rating";
 
 type Props = {
   businesses: Business[];
@@ -29,7 +30,7 @@ export function MapPane({ businesses, onSelect, city, notice }: Props) {
             <View style={styles.pin}><Ionicons name="location" size={16} color="#FFF" /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.title} numberOfLines={1}>{b.name}</Text>
-              <Text style={styles.sub} numberOfLines={1}>★ {b.rating.toFixed(1)} · {b.address}</Text>
+              <Text style={styles.sub} numberOfLines={1}>★ {ratingText(b)} · {b.address}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
           </Pressable>

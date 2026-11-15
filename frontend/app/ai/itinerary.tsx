@@ -15,6 +15,7 @@ import * as Haptics from "expo-haptics";
 import { useAuth } from "@/src/auth";
 import { api, Business } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
+import { ratingText } from "@/src/rating";
 
 type Stop = { time: string; note: string; business?: Business };
 type DayT = { day: number; theme: string; stops: Stop[] };
@@ -150,7 +151,7 @@ export default function ItineraryScreen() {
                             <View style={{ flex: 1 }}>
                               <Text style={styles.stopName} numberOfLines={1}>{s.business.name}</Text>
                               <Text style={styles.stopMeta} numberOfLines={1}>
-                                ★ {s.business.rating.toFixed(1)} · {s.business.category}
+                                ★ {ratingText(s.business)} · {s.business.category}
                               </Text>
                               <Text style={styles.stopNote} numberOfLines={2}>{s.note}</Text>
                             </View>

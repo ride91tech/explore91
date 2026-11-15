@@ -87,7 +87,7 @@ export default function OwnerOverview() {
         <View style={[styles.kpiGrid, { gridTemplateColumns: `repeat(${kpiCols}, 1fr)` } as any]}>
           <KPI icon="calendar-outline" label="Bookings" value={data?.booking_count ?? 0} />
           <KPI icon="time-outline" label="Upcoming" value={data?.upcoming_count ?? 0} tint={colors.warning} />
-          <KPI icon="star" label="Avg rating" value={(data?.avg_rating ?? 0).toFixed(1)} tint={colors.brandTertiary} />
+          <KPI icon="star" label="Avg rating" value={data?.avg_rating ? data.avg_rating.toFixed(1) : "—"} tint={colors.brandTertiary} />
           <KPI icon="storefront-outline" label="Businesses" value={data?.business_count ?? 0} />
         </View>
       </View>

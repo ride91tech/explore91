@@ -23,6 +23,7 @@ import { useToast } from "@/src/components/Toast";
 import { useAuth } from "@/src/auth";
 import { placeUrl, shareContent } from "@/src/links";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
+import { ratingText } from "@/src/rating";
 
 type ReviewT = {
   review_id: string;
@@ -72,7 +73,12 @@ export default function BusinessDetail() {
       setNewRating(5);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       show("Thanks — your review is live.", "success");
-      await loadReviews();
+      // The place's rating is recomputed from its reviews on every post, so
+      // refresh the header too, not just the list.
+      await Promise.all([
+        loadReviews(),
+        api<Business>(`/businesses/${id}`).then(setBiz).catch(() => {}),
+      ]);
     } catch (e: any) {
       show(
         e?.status === 401 ? "Sign in to leave a review."
@@ -278,8 +284,12 @@ export default function BusinessDetail() {
           <Text style={styles.title} testID="business-name">{biz.name}</Text>
           <View style={styles.metaRow}>
             <Ionicons name="star" size={14} color={colors.warning} />
-            <Text style={styles.metaBold}>{biz.rating.toFixed(1)}</Text>
-            <Text style={styles.metaLight}>  ({biz.review_count.toLocaleString()} reviews)</Text>
+            <Text style={styles.metaBold}>{ratingText(biz)}</Text>
+            <Text style={styles.metaLight}>
+              {biz.review_count
+                ? `  (${biz.review_count.toLocaleString()} review${biz.review_count === 1 ? "" : "s"})`
+                : "  · No reviews yet"}
+            </Text>
             <Text style={styles.dot2}>•</Text>
             <Text style={styles.metaLight}>{biz.price_range}</Text>
           </View>

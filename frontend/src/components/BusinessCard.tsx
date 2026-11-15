@@ -5,6 +5,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, fonts, radius, shadow, spacing, text as tText, type as tType } from "@/src/theme";
 import { Business } from "@/src/api";
+import { ratingText } from "@/src/rating";
 
 type Props = {
   biz: Business;
@@ -23,7 +24,7 @@ export function BusinessCard({ biz, variant = "medium", onPress, testID }: Props
           <Text style={styles.rowSub} numberOfLines={1}>{biz.tags.slice(0, 2).join(" · ") || biz.category}</Text>
           <View style={styles.rating}>
             <Ionicons name="star" size={12} color={colors.brandTertiary} />
-            <Text style={styles.ratingText}>{biz.rating.toFixed(1)}</Text>
+            <Text style={styles.ratingText}>{ratingText(biz)}</Text>
             <Text style={styles.rowSub}>  · {biz.price_range} · {biz.address}</Text>
           </View>
         </View>
@@ -50,7 +51,7 @@ export function BusinessCard({ biz, variant = "medium", onPress, testID }: Props
         <View style={styles.cardMeta}>
           <View style={styles.ratingDark}>
             <Ionicons name="star" size={12} color={colors.brandTertiary} />
-            <Text style={styles.ratingDarkText}>{biz.rating.toFixed(1)}</Text>
+            <Text style={styles.ratingDarkText}>{ratingText(biz)}</Text>
           </View>
           <Text style={styles.cardSub} numberOfLines={1}>  · {biz.address}</Text>
         </View>

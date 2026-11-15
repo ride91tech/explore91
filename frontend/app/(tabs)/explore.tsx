@@ -20,6 +20,7 @@ import { useAuth } from "@/src/auth";
 import { api, Business, CategoryT, CityT } from "@/src/api";
 import { PlaceTile } from "@/src/components/PlaceTile";
 import { MapPane } from "@/src/components/MapPane";
+import { ratingText } from "@/src/rating";
 import {
   FilterSheet,
   EMPTY_FILTERS,
@@ -294,7 +295,7 @@ export default function Explore() {
                       <View style={styles.pickRating}>
                         <Ionicons name="star" size={12} color={colors.brandTertiary} />
                         <Text style={styles.pickRatingText}>
-                          {editorsPick.rating?.toFixed(1) ?? "—"}
+                          {ratingText(editorsPick)}
                           {editorsPick.review_count
                             ? ` · ${editorsPick.review_count.toLocaleString("en-IN")} reviews`
                             : ""}

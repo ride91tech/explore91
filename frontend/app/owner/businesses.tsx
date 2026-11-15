@@ -11,6 +11,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { api, Business } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
+import { ratingText } from "@/src/rating";
 
 export default function OwnerBusinesses() {
   const router = useRouter();
@@ -80,7 +81,7 @@ export default function OwnerBusinesses() {
                   {b.rating ? (
                     <View style={styles.ratingPill}>
                       <Ionicons name="star" size={11} color={colors.brandTertiary} />
-                      <Text style={styles.ratingText}>{b.rating.toFixed(1)} ({b.review_count})</Text>
+                      <Text style={styles.ratingText}>{ratingText(b)} ({b.review_count})</Text>
                     </View>
                   ) : null}
                 </View>

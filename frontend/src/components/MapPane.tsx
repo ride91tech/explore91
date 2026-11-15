@@ -6,6 +6,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { Business } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 import { MapPane as PlaceList } from "./MapPane.web";
+import { ratingText } from "@/src/rating";
 
 /**
  * Android draws this map with Google Maps, whose SDK crashes the whole app
@@ -65,7 +66,7 @@ export function MapPane({ businesses, onSelect, city }: Props) {
         <Pressable style={styles.card} onPress={() => onSelect?.(selected)}>
           <Text style={styles.title} numberOfLines={1}>{selected.name}</Text>
           <Text style={styles.sub} numberOfLines={1}>
-            ★ {selected.rating.toFixed(1)} · {selected.category} · {selected.price_range}
+            ★ {ratingText(selected)} · {selected.category} · {selected.price_range}
           </Text>
           <Text style={styles.sub} numberOfLines={1}>{selected.address}</Text>
           <Text style={styles.cta}>Tap to view details ›</Text>

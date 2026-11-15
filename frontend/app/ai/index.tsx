@@ -19,6 +19,7 @@ import * as Haptics from "expo-haptics";
 import { useAuth } from "@/src/auth";
 import { api, Business } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
+import { ratingText } from "@/src/rating";
 
 const MOODS = ["Romantic", "Adventurous", "Relaxed", "Party", "Family", "Foodie"];
 const BUDGETS = [
@@ -141,7 +142,7 @@ export default function AIConcierge() {
                 <View style={styles.pickInfo}>
                   <Text style={styles.pickName}>{p.business.name}</Text>
                   <Text style={styles.pickMeta}>
-                    ★ {p.business.rating.toFixed(1)} · {p.business.category} · {p.business.price_range}
+                    ★ {ratingText(p.business)} · {p.business.category} · {p.business.price_range}
                   </Text>
                   <Text style={styles.pickReason}>{p.reason}</Text>
                 </View>

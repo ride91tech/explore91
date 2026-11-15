@@ -13,6 +13,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import type { Business } from "@/src/api";
+import { ratingText } from "@/src/rating";
 import { colors, fonts, radius, shadow, spacing, text as tText, type as tType } from "@/src/theme";
 
 export function PlaceTile({
@@ -56,7 +57,7 @@ export function PlaceTile({
         <View style={styles.ratingRow}>
           <Ionicons name="star" size={11} color={colors.brandTertiary} />
           <Text style={styles.rating}>
-            {biz.rating?.toFixed(1) ?? "—"}
+            {ratingText(biz)}
             {biz.review_count ? ` · ${biz.review_count.toLocaleString("en-IN")}` : ""}
           </Text>
         </View>
