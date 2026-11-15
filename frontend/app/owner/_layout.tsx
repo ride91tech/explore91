@@ -13,7 +13,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { Slot, useRouter } from "expo-router";
 import { useRouteSegments } from "@/src/routing";
 import { useAuth } from "@/src/auth";
-import { api } from "@/src/api";
+import { api, UserT } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 const NAV = [
@@ -26,6 +26,64 @@ const NAV = [
 ];
 
 const MOBILE_BREAKPOINT = 900;
+
+type SidebarProps = {
+  active: string;
+  user: UserT;
+  onNavigate: (href: string) => void;
+  onSignOut: () => void;
+  compact?: boolean;
+};
+
+// Lives at module level so React sees the same component on every render.
+// Defined inside OwnerLayout, it was a new component type each time the layout
+// re-rendered, so React threw the whole sidebar away and remounted it.
+function Sidebar({ active, user, onNavigate, onSignOut, compact = false }: SidebarProps) {
+  return (
+    <View style={[styles.sidebar, compact && styles.sidebarCompact]}>
+      <View style={styles.brandRow}>
+        <View style={styles.brandDot} />
+        <View>
+          <Text style={styles.brand}>EXPLORE91</Text>
+          <Text style={styles.brandSub}>Business studio</Text>
+        </View>
+      </View>
+      <View style={{ marginTop: spacing.xl, gap: 2 }}>
+        {NAV.map((n) => {
+          const isActive = active === n.key;
+          return (
+            <Pressable
+              key={n.key}
+              testID={`owner-nav-${n.key}`}
+              onPress={() => onNavigate(n.href)}
+              style={[styles.navItem, isActive && styles.navItemActive]}
+            >
+              <Ionicons
+                name={n.icon}
+                size={18}
+                color={isActive ? colors.onSurface : colors.onSurfaceTertiary}
+              />
+              <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>{n.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={{ flex: 1 }} />
+      <View style={styles.userBox}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{(user.name?.[0] || "O").toUpperCase()}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
+          <Text style={styles.userEmail} numberOfLines={1}>{user.email ?? user.phone}</Text>
+        </View>
+        <Pressable testID="owner-signout" onPress={onSignOut} hitSlop={6}>
+          <Ionicons name="log-out-outline" size={16} color={colors.onSurfaceTertiary} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 export default function OwnerLayout() {
   const router = useRouter();
@@ -119,56 +177,12 @@ export default function OwnerLayout() {
     setDrawerOpen(false);
     router.push(href as any);
   };
-
-  const Sidebar = ({ compact = false }: { compact?: boolean }) => (
-    <View style={[styles.sidebar, compact && styles.sidebarCompact]}>
-      <View style={styles.brandRow}>
-        <View style={styles.brandDot} />
-        <View>
-          <Text style={styles.brand}>EXPLORE91</Text>
-          <Text style={styles.brandSub}>Business studio</Text>
-        </View>
-      </View>
-      <View style={{ marginTop: spacing.xl, gap: 2 }}>
-        {NAV.map((n) => {
-          const isActive = active === n.key;
-          return (
-            <Pressable
-              key={n.key}
-              testID={`owner-nav-${n.key}`}
-              onPress={() => nav(n.href)}
-              style={[styles.navItem, isActive && styles.navItemActive]}
-            >
-              <Ionicons
-                name={n.icon}
-                size={18}
-                color={isActive ? colors.onSurface : colors.onSurfaceTertiary}
-              />
-              <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>{n.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <View style={{ flex: 1 }} />
-      <View style={styles.userBox}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{(user.name?.[0] || "O").toUpperCase()}</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
-          <Text style={styles.userEmail} numberOfLines={1}>{user.email ?? user.phone}</Text>
-        </View>
-        <Pressable testID="owner-signout" onPress={() => signOut()} hitSlop={6}>
-          <Ionicons name="log-out-outline" size={16} color={colors.onSurfaceTertiary} />
-        </Pressable>
-      </View>
-    </View>
-  );
+  const sidebarProps = { active, user, onNavigate: nav, onSignOut: () => signOut() };
 
   if (isDesktop) {
     return (
       <View style={styles.shell}>
-        <Sidebar />
+        <Sidebar {...sidebarProps} />
         <ScrollView
           style={styles.content}
           contentContainerStyle={styles.contentInner}
@@ -218,7 +232,7 @@ export default function OwnerLayout() {
       >
         <Pressable style={styles.drawerBackdrop} onPress={() => setDrawerOpen(false)}>
           <Pressable style={styles.drawerPanel} onPress={() => {}}>
-            <Sidebar compact />
+            <Sidebar compact {...sidebarProps} />
           </Pressable>
         </Pressable>
       </Modal>
