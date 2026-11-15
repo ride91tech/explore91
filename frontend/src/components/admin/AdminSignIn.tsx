@@ -13,40 +13,23 @@ import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth";
+import { useEmailOtp } from "@/src/useEmailOtp";
 import { api } from "@/src/api";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1685271552630-9bc169185566?crop=entropy&cs=srgb&fm=jpg&w=1600&q=85";
 
 export function AdminSignIn() {
-  const { user, loading, signIn, signOut, refresh } = useAuth();
+  const { user, loading, signOut, refresh } = useAuth();
   const router = useRouter();
   const [ensuring, setEnsuring] = useState(false);
   const [ensureErr, setEnsureErr] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [signingIn, setSigningIn] = useState(false);
-  const [signInErr, setSignInErr] = useState<string | null>(null);
-
-  // Mirrors the backend's DevSignIn pattern so the button disables instead of
-  // the server answering 422.
-  const emailReady = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()) && !signingIn;
-
-  const handleSignIn = async () => {
-    if (!emailReady) return;
-    setSignInErr(null);
-    setSigningIn(true);
-    try {
-      await signIn(email.trim());
-    } catch (e: any) {
-      setSignInErr(
-        e?.status === 404
-          ? "Sign-in isn't switched on for this server (DEV_AUTH_ENABLED is unset)."
-          : e?.message ?? "Could not sign in."
-      );
-    } finally {
-      setSigningIn(false);
-    }
-  };
+  // Operators are users like anyone else: their account needs the same
+  // confirmation. It used to be absent here entirely, which meant a NEW
+  // operator signing in got a 403 from the age gate with no way to answer it.
+  const [agreed, setAgreed] = useState(false);
+  const otp = useEmailOtp();
+  const sendReady = otp.emailOk && agreed && !otp.busy;
 
   const isAdmin = user?.roles?.includes("admin");
 
@@ -116,38 +99,97 @@ export function AdminSignIn() {
                 requires the <Text style={styles.code}>admin</Text> role, granted in the
                 next step.
               </Text>
-              <TextInput
-                testID="admin-signin-email"
-                value={email}
-                onChangeText={(t) => { setEmail(t); setSignInErr(null); }}
-                placeholder="operator@explore91.com"
-                placeholderTextColor={colors.onSurfaceTertiary}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                returnKeyType="go"
-                onSubmitEditing={handleSignIn}
-                editable={!signingIn}
-                style={styles.input}
-              />
-              <Pressable
-                testID="admin-signin-continue"
-                onPress={handleSignIn}
-                disabled={!emailReady}
-                style={[styles.cta, !emailReady && { opacity: 0.45 }]}
-              >
-                {signingIn ? (
-                  <ActivityIndicator color={colors.onSurface} />
-                ) : (
-                  <Text style={styles.ctaText}>Continue</Text>
-                )}
-              </Pressable>
-              {signInErr ? <Text style={styles.err}>{signInErr}</Text> : null}
-              <Text style={styles.helper}>
-                Temporary sign-in — no password, nothing verified. One-time passcodes are
-                coming.
-              </Text>
+              {otp.step === "email" ? (
+                <>
+                  <TextInput
+                    testID="admin-signin-email"
+                    value={otp.email}
+                    onChangeText={otp.setEmail}
+                    placeholder="operator@explore91.com"
+                    placeholderTextColor={colors.onSurfaceTertiary}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="email"
+                    returnKeyType="go"
+                    onSubmitEditing={() => sendReady && otp.send()}
+                    editable={!otp.busy}
+                    style={styles.input}
+                  />
+                  <Pressable
+                    testID="admin-consent"
+                    onPress={() => setAgreed((v) => !v)}
+                    style={styles.consentRow}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: agreed }}
+                  >
+                    <View style={[styles.box, agreed && styles.boxOn]}>
+                      {agreed ? <Ionicons name="checkmark" size={13} color="#fff" /> : null}
+                    </View>
+                    <Text style={styles.consentText}>
+                      I am 18 or older and I agree to the{" "}
+                      <Text style={styles.link} onPress={() => router.push("/privacy")}>
+                        Privacy Notice
+                      </Text>
+                      .
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID="admin-send-code"
+                    onPress={() => otp.send()}
+                    disabled={!sendReady}
+                    style={[styles.cta, !sendReady && { opacity: 0.45 }]}
+                  >
+                    {otp.busy ? (
+                      <ActivityIndicator color={colors.onSurface} />
+                    ) : (
+                      <Text style={styles.ctaText}>Email me a code</Text>
+                    )}
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.sentTo}>
+                    Enter the 6-digit code sent to{" "}
+                    <Text style={styles.link}>{otp.email.trim()}</Text>
+                  </Text>
+                  <TextInput
+                    testID="admin-signin-code"
+                    value={otp.code}
+                    onChangeText={otp.setCode}
+                    placeholder="123456"
+                    placeholderTextColor={colors.onSurfaceTertiary}
+                    keyboardType="number-pad"
+                    textContentType="oneTimeCode"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    autoFocus
+                    returnKeyType="go"
+                    onSubmitEditing={() => otp.codeOk && otp.verify(agreed)}
+                    editable={!otp.busy}
+                    style={[styles.input, styles.codeInput]}
+                  />
+                  <Pressable
+                    testID="admin-verify"
+                    onPress={() => otp.verify(agreed)}
+                    disabled={!otp.codeOk || otp.busy}
+                    style={[styles.cta, (!otp.codeOk || otp.busy) && { opacity: 0.45 }]}
+                  >
+                    {otp.busy ? (
+                      <ActivityIndicator color={colors.onSurface} />
+                    ) : (
+                      <Text style={styles.ctaText}>Sign in</Text>
+                    )}
+                  </Pressable>
+                  {otp.notice ? <Text style={styles.helper}>{otp.notice}</Text> : null}
+                  <View style={styles.codeLinks}>
+                    <Text style={styles.link} onPress={otp.resend}>Send a new code</Text>
+                    <Text style={styles.helper}>·</Text>
+                    <Text style={styles.link} onPress={otp.changeEmail}>Use a different email</Text>
+                  </View>
+                </>
+              )}
+              {otp.error ? <Text style={styles.err}>{otp.error}</Text> : null}
               <View style={styles.divider} />
               <Text style={styles.helper}>
                 Are you a customer? Return to the{" "}
@@ -324,6 +366,16 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: "#FFF", fontSize: tType.base, fontFamily: fonts.bodyBold },
   err: { color: colors.error, fontSize: tType.sm, marginTop: 12, lineHeight: 18 },
 
+  consentRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 14 },
+  box: {
+    width: 18, height: 18, borderRadius: 5, borderWidth: 1.5,
+    borderColor: colors.border, alignItems: "center", justifyContent: "center", marginTop: 2,
+  },
+  boxOn: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  consentText: { flex: 1, fontSize: tType.sm, color: colors.onSurfaceTertiary, lineHeight: 20 },
+  sentTo: { fontSize: tType.base, color: colors.onSurfaceTertiary, marginTop: 8, lineHeight: 22 },
+  codeInput: { letterSpacing: 8, textAlign: "center", fontSize: 20 },
+  codeLinks: { flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 14 },
   divider: { height: 1, backgroundColor: colors.divider, marginTop: 24, marginBottom: 20 },
   helper: { fontSize: tType.sm, color: colors.onSurfaceTertiary, textAlign: "center", lineHeight: 20 },
   link: { color: colors.brandPrimary, fontFamily: fonts.bodyBold },

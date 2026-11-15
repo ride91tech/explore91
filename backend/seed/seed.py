@@ -202,6 +202,10 @@ async def ensure_indexes() -> None:
     await db.user_sessions.create_index("session_token", unique=True)
     await db.user_sessions.create_index("user_id")
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+    # Sign-in codes: one live per address, and gone on their own once
+    # expired - claim_code checks expiry itself, this just stops them piling up.
+    await db.otp_codes.create_index("email", unique=True)
+    await db.otp_codes.create_index("expires_at", expireAfterSeconds=0)
     await db.businesses.create_index("business_id", unique=True)
     # Sparse: a doc is briefly slug-less between insert and backfill.
     await db.businesses.create_index("slug", unique=True, sparse=True)

@@ -17,6 +17,10 @@ type Ctx = {
   loading: boolean;
   signIn: (email: string, name?: string, isAdult?: boolean) => Promise<void>;
   deleteAccount: () => Promise<void>;
+  /** Email a six-digit sign-in code. */
+  requestCode: (email: string) => Promise<void>;
+  /** Exchange a code for a session. */
+  verifyCode: (email: string, code: string, isAdult?: boolean) => Promise<void>;
   signInWithApple: (isAdult?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -27,6 +31,8 @@ const AuthCtx = createContext<Ctx>({
   loading: true,
   signIn: async () => {},
   deleteAccount: async () => {},
+  requestCode: async () => {},
+  verifyCode: async () => {},
   signInWithApple: async () => {},
   signOut: async () => {},
   refresh: async () => {},
@@ -71,6 +77,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await api<{ session_token: string; user: UserT }>("/auth/dev", {
       method: "POST",
       body: JSON.stringify({ email, name: name ?? null, is_adult: isAdult }),
+    });
+    await setToken(res.session_token);
+    setUser(res.user);
+  }, []);
+
+  const requestCode = useCallback(async (email: string) => {
+    await api("/auth/otp/send", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  }, []);
+
+  const verifyCode = useCallback(async (email: string, code: string, isAdult = false) => {
+    const res = await api<{ session_token: string; user: UserT }>("/auth/otp/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, code, is_adult: isAdult }),
     });
     await setToken(res.session_token);
     setUser(res.user);
@@ -127,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signInWithApple, signOut, refresh, deleteAccount }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signInWithApple, signOut, refresh, deleteAccount, requestCode, verifyCode }}>
       {children}
     </AuthCtx.Provider>
   );

@@ -54,6 +54,27 @@ class DevSignIn(BaseModel):
         return v.strip() if isinstance(v, str) else v
 
 
+class OtpSendRequest(BaseModel):
+    email: str = Field(
+        min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _strip(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+
+class OtpVerifyRequest(OtpSendRequest):
+    # Digits only and exactly six: anything else is refused by the model,
+    # before a database round-trip or an attempt is spent on it.
+    code: str = Field(pattern=r"^[0-9]{6}$")
+    name: Optional[str] = Field(default=None, max_length=120)
+    # See DevSignIn.is_adult and core/consent.py. Required to CREATE an
+    # account; an existing one signs in without it.
+    is_adult: bool = False
+
+
 class AuthResponse(BaseModel):
     session_token: str
     user: User

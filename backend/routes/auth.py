@@ -11,11 +11,12 @@ in that login path.
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict
+from typing import Dict, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
+from pymongo.errors import DuplicateKeyError
 
 from core.config import (
     ADMIN_EMAILS,
@@ -32,6 +33,13 @@ from core.consent import (
 )
 from core.db import db
 from core.erasure import erase_user
+from core.otp import (
+    OtpNotConfigured,
+    claim_code,
+    issue_code,
+    otp_configured,
+)
+import core.otp as otp_mod
 from core.security import (
     client_key,
     get_current_user,
@@ -43,6 +51,8 @@ from models import (
     AppleSignInRequest,
     AuthResponse,
     DevSignIn,
+    OtpSendRequest,
+    OtpVerifyRequest,
     RoleUpgrade,
     User,
 )
@@ -132,6 +142,78 @@ async def root():
     return {"service": "Explore91", "status": "ok"}
 
 
+async def _sign_in_by_email(
+    raw_email: str, provided_name: Optional[str], is_adult: bool, token_prefix: str
+) -> AuthResponse:
+    """Find or create the account for an address and issue it a session.
+
+    Every email-based sign-in comes through here: /auth/dev today, /auth/otp
+    from now on. It exists because the consent and age rules were once
+    written inline in one handler, and the second and third sign-in paths
+    did not get them - consent went unrecorded on Apple and for every
+    returning user. One function, so a fourth path cannot drift.
+
+    The caller must already have established that the person controls the
+    address (OTP) or decided not to care (dev). This function does not check.
+    """
+    email = raw_email.strip().lower()
+    name = (provided_name or "").strip() or email.split("@")[0]
+    now = datetime.now(timezone.utc)
+
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        user_doc = await _refresh_existing(existing, provided_name, name, is_adult, now)
+    else:
+        require_adult_for_new_account(is_adult)
+        user_doc = {
+            "user_id": f"user_{uuid.uuid4().hex[:12]}",
+            "email": email,
+            "name": name,
+            "picture": None,
+            "wallet_points": 500,
+            "home_city": "Goa",
+            "roles": ["customer"],
+            "created_at": now,
+            **consent_fields(is_adult, now),
+        }
+        try:
+            await db.users.insert_one(dict(user_doc))
+            user_doc.pop("_id", None)
+        except DuplicateKeyError:
+            # Two first sign-ins for the same address raced: both saw no
+            # account, both inserted, and the unique index on email refused
+            # the second. That was a 500. The account now exists, so treat
+            # this exactly as a returning user.
+            existing = await db.users.find_one({"email": email}, {"_id": 0})
+            user_doc = await _refresh_existing(existing, provided_name, name, is_adult, now)
+
+    session_token = f"{token_prefix}{uuid.uuid4().hex}{uuid.uuid4().hex}"
+    await db.user_sessions.insert_one({
+        # The digest, never the token — see core.security.hash_session_token.
+        "session_token": hash_session_token(session_token),
+        "user_id": user_doc["user_id"],
+        "created_at": now,
+        "expires_at": now + timedelta(days=SESSION_TTL_DAYS),
+    })
+    return AuthResponse(session_token=session_token, user=User(**user_doc))
+
+
+async def _refresh_existing(
+    existing: dict, provided_name: Optional[str], name: str, is_adult: bool, now
+) -> dict:
+    set_fields: dict = {}
+    # Only fill a blank name; never overwrite one the user has set.
+    if provided_name and not existing.get("name"):
+        set_fields["name"] = name
+    # Accounts predating the consent work have no record of it. The user just
+    # ticked the box to get here, so capture it rather than leaving every
+    # existing account permanently unanswerable.
+    set_fields.update(backfill_fields(existing, is_adult, now))
+    if set_fields:
+        await db.users.update_one({"user_id": existing["user_id"]}, {"$set": set_fields})
+    return {**existing, **set_fields}
+
+
 async def _require_dev_auth() -> None:
     """404 unless the dev gate is open.
 
@@ -194,61 +276,71 @@ async def dev_sign_in(request: Request):
             ],
         )
 
-    email = payload.email.strip().lower()
-    name = (payload.name or "").strip() or email.split("@")[0]
-
     # Audit trail. If this ever appears in a production log, the gate was set
-    # on a service where it should not have been.
-    # The address is deliberately not logged. Cloud Run retains these logs
-    # under Google's policy, not ours, so an email here is personal data
-    # sitting outside every retention rule we control.
+    # on a service where it should not have been. The address is deliberately
+    # not logged: Cloud Run retains these logs under Google's policy, not
+    # ours, so an email here is personal data outside every retention rule we
+    # control.
     logger.warning("DEV SIGN-IN: issuing a session, no credential checked")
 
     # The prefix makes these identifiable in user_sessions, so they can be
     # found and purged when real sign-in lands.
-    session_token = f"dev_{uuid.uuid4().hex}{uuid.uuid4().hex}"
-    now = datetime.now(timezone.utc)
+    return await _sign_in_by_email(
+        payload.email, payload.name, payload.is_adult, token_prefix="dev_"
+    )
 
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        set_fields: dict = {}
-        # Only fill a blank name; never overwrite one the user has set.
-        if payload.name and not existing.get("name"):
-            set_fields["name"] = name
-        # Accounts predating the consent work have no record of it. The user
-        # just ticked the box to get here, so capture it rather than leaving
-        # every existing account permanently unanswerable.
-        set_fields.update(backfill_fields(existing, payload.is_adult, now))
-        if set_fields:
-            await db.users.update_one({"user_id": user_id}, {"$set": set_fields})
-        user_doc = {**existing, **set_fields}
-    else:
-        require_adult_for_new_account(payload.is_adult)
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        user_doc = {
-            "user_id": user_id,
-            "email": email,
-            "name": name,
-            "picture": None,
-            "wallet_points": 500,
-            "home_city": "Goa",
-            "roles": ["customer"],
-            "created_at": now,
-            **consent_fields(payload.is_adult, now),
-        }
-        await db.users.insert_one(dict(user_doc))
-        user_doc.pop("_id", None)
 
-    await db.user_sessions.insert_one({
-        # The digest, never the token — see core.security.hash_session_token.
-        "session_token": hash_session_token(session_token),
-        "user_id": user_id,
-        "created_at": now,
-        "expires_at": now + timedelta(days=SESSION_TTL_DAYS),
-    })
+def _require_otp() -> None:
+    if not otp_configured():
+        # 503, not 404: unlike /auth/dev this route is meant to exist in
+        # production, so a missing provider is a fault to surface, not a
+        # secret to keep.
+        raise HTTPException(status_code=503, detail="Sign-in by email code is not configured")
 
-    return AuthResponse(session_token=session_token, user=User(**user_doc))
+
+@router.post("/auth/otp/send", status_code=202)
+async def otp_send(payload: OtpSendRequest, request: Request):
+    """Email a six-digit sign-in code.
+
+    Answers the same way whether or not an account exists for the address,
+    so it cannot be used to discover who has signed up.
+
+    Two limits, because they stop different attacks. Per address stops
+    anyone flooding one inbox - and caps how many codes, and so how many
+    guesses, can be had against it. Per caller stops one client spraying
+    codes across many addresses.
+    """
+    _require_otp()
+    email = payload.email.lower()
+    await rate_limit("otp_send_ip", client_key(request), limit=20, window_sec=3600)
+    await rate_limit("otp_send_addr", f"e:{email}", limit=5, window_sec=3600)
+    code = await issue_code(email)
+    try:
+        # Looked up through the module so tests can replace the sender.
+        await otp_mod.send_code_email(email, code)
+    except OtpNotConfigured:
+        raise HTTPException(status_code=503, detail="Sign-in by email code is not configured")
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not send the code. Please try again.")
+    return {"sent": True}
+
+
+@router.post("/auth/otp/verify", response_model=AuthResponse)
+async def otp_verify(payload: OtpVerifyRequest, request: Request):
+    """Exchange a code for a session.
+
+    One error for every way this can fail. Distinguishing "wrong" from
+    "expired" from "too many attempts" would tell an attacker which codes
+    were worth continuing against.
+    """
+    _require_otp()
+    email = payload.email.lower()
+    await rate_limit("otp_verify_ip", client_key(request), limit=30, window_sec=600)
+    if not await claim_code(email, payload.code):
+        raise HTTPException(status_code=400, detail="That code is wrong or has expired.")
+    return await _sign_in_by_email(
+        email, payload.name, payload.is_adult, token_prefix="otp_"
+    )
 
 
 @router.get("/auth/me", response_model=User)

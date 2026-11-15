@@ -19,23 +19,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useAuth } from "@/src/auth";
+import { useEmailOtp } from "@/src/useEmailOtp";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1685271552630-9bc169185566?crop=entropy&cs=srgb&fm=jpg&w=1600&q=85";
 
 /** Same shape the backend's DevSignIn model accepts, so the button disables
  *  rather than the server answering 422. */
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-
 export default function Login() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signIn, signInWithApple } = useAuth();
+  const { signInWithApple } = useAuth();
+  const otp = useEmailOtp();
   const [agreed, setAgreed] = useState(false);
   const { width, height } = Dimensions.get("window");
   const [appleAvailable, setAppleAvailable] = useState(false);
-  const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,29 +44,8 @@ export default function Login() {
 
   // Consent is a precondition, not a formality: DPDP s6 wants a clear
   // affirmative action, which a pre-ticked box or an implied agreement in
-  // small print is not. So Continue stays disabled until it is ticked.
-  const ready = EMAIL.test(email.trim()) && agreed && !busy;
-
-  const handleContinue = async () => {
-    if (!ready) return;
-    setError(null);
-    setBusy(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await signIn(email.trim(), undefined, agreed);
-    } catch (e: any) {
-      // The endpoint 404s unless DEV_AUTH_ENABLED is set on the server, which
-      // is the case someone hitting this against production will meet — so
-      // say that rather than "not found".
-      setError(
-        e?.status === 404
-          ? "Sign-in isn't switched on for this server."
-          : e?.message ?? "Couldn't sign in. Please try again."
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
+  // small print is not. So no code is sent until it is ticked.
+  const ready = otp.emailOk && agreed && !otp.busy;
 
   const handleApple = async () => {
     // Belt and braces with the dimmed wrapper below: the consent box gates
@@ -120,40 +97,85 @@ export default function Login() {
             From candlelit dining to sunrise treks — book across restaurants, hotels, spas, events and more, all in one app.
           </Text>
 
-          <TextInput
-            testID="signin-email"
-            value={email}
-            onChangeText={(t) => { setEmail(t); setError(null); }}
-            placeholder="you@example.com"
-            placeholderTextColor="rgba(255,255,255,0.45)"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            returnKeyType="go"
-            onSubmitEditing={handleContinue}
-            editable={!busy}
-            style={styles.input}
-          />
+          {otp.step === "email" ? (
+            <>
+              <TextInput
+                testID="signin-email"
+                value={otp.email}
+                onChangeText={otp.setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor="rgba(255,255,255,0.45)"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                returnKeyType="go"
+                onSubmitEditing={() => ready && otp.send()}
+                editable={!otp.busy}
+                style={styles.input}
+              />
+              <Pressable
+                testID="signin-send-code"
+                onPress={() => otp.send()}
+                disabled={!ready}
+                style={[styles.cta, !ready && styles.ctaDisabled]}
+              >
+                {otp.busy ? (
+                  <ActivityIndicator color={colors.onSurface} />
+                ) : (
+                  <Text style={styles.ctaText}>Email me a code</Text>
+                )}
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text testID="signin-code-sent" style={styles.sentTo}>
+                Enter the 6-digit code we sent to{"\n"}
+                <Text style={styles.sentToEmail}>{otp.email.trim()}</Text>
+              </Text>
+              <TextInput
+                testID="signin-code"
+                value={otp.code}
+                onChangeText={otp.setCode}
+                placeholder="123456"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                keyboardType="number-pad"
+                // Lets iOS and Android offer the code straight from the email.
+                textContentType="oneTimeCode"
+                autoComplete="one-time-code"
+                maxLength={6}
+                autoFocus
+                returnKeyType="go"
+                onSubmitEditing={() => otp.codeOk && otp.verify(agreed)}
+                editable={!otp.busy}
+                style={[styles.input, styles.codeInput]}
+              />
+              <Pressable
+                testID="signin-verify"
+                onPress={() => otp.verify(agreed)}
+                disabled={!otp.codeOk || otp.busy}
+                style={[styles.cta, (!otp.codeOk || otp.busy) && styles.ctaDisabled]}
+              >
+                {otp.busy ? (
+                  <ActivityIndicator color={colors.onSurface} />
+                ) : (
+                  <Text style={styles.ctaText}>Sign in</Text>
+                )}
+              </Pressable>
+              {otp.notice ? <Text style={styles.notice}>{otp.notice}</Text> : null}
+              <View style={styles.codeLinks}>
+                <Text testID="signin-resend" style={styles.codeLink} onPress={otp.resend}>
+                  Send a new code
+                </Text>
+                <Text style={styles.codeLinkSep}>·</Text>
+                <Text testID="signin-change-email" style={styles.codeLink} onPress={otp.changeEmail}>
+                  Use a different email
+                </Text>
+              </View>
+            </>
+          )}
 
-          <Pressable
-            testID="signin-continue"
-            onPress={handleContinue}
-            disabled={!ready}
-            style={[styles.cta, !ready && styles.ctaDisabled]}
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.onSurface} />
-            ) : (
-              <Text style={styles.ctaText}>Continue</Text>
-            )}
-          </Pressable>
-
-          <Text testID="signin-placeholder-note" style={styles.devNote}>
-            Temporary sign-in — no password, nothing verified. One-time passcodes are coming.
-          </Text>
-
-          {appleAvailable ? (
+          {appleAvailable && otp.step === "email" ? (
             <View
               testID="apple-signin-wrap"
               pointerEvents={agreed ? "auto" : "none"}
@@ -169,8 +191,9 @@ export default function Login() {
             </View>
           ) : null}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {otp.error ?? error ? <Text style={styles.error}>{otp.error ?? error}</Text> : null}
 
+          {otp.step === "email" ? (
           <Pressable
             testID="consent-checkbox"
             onPress={() => setAgreed((v) => !v)}
@@ -189,6 +212,7 @@ export default function Login() {
               . It explains what Explore91 collects and how to delete it.
             </Text>
           </Pressable>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -227,13 +251,22 @@ const styles = StyleSheet.create({
   },
   ctaDisabled: { opacity: 0.45 },
   ctaText: { color: colors.onSurface, fontSize: 16, fontFamily: fonts.bodyBold },
-  devNote: {
-    color: "rgba(255,255,255,0.65)",
-    fontSize: 12,
-    lineHeight: 17,
-    textAlign: "center",
-    marginTop: spacing.md,
+  sentTo: {
+    color: "rgba(255,255,255,0.75)", fontSize: 14, lineHeight: 21,
+    textAlign: "center", marginBottom: spacing.md,
   },
+  sentToEmail: { color: "#fff", fontFamily: fonts.bodySemi },
+  codeInput: { letterSpacing: 8, textAlign: "center", fontSize: 22 },
+  notice: {
+    color: "rgba(255,255,255,0.7)", fontSize: 12, textAlign: "center",
+    marginTop: spacing.sm,
+  },
+  codeLinks: {
+    flexDirection: "row", justifyContent: "center", alignItems: "center",
+    gap: spacing.sm, marginTop: spacing.md,
+  },
+  codeLink: { color: "#fff", fontSize: 13, textDecorationLine: "underline" },
+  codeLinkSep: { color: "rgba(255,255,255,0.4)", fontSize: 13 },
   appleBtn: { height: 54, width: "100%" },
   error: { color: "#FFC5C5", fontSize: 13, textAlign: "center", marginTop: spacing.md },
   consentRow: {
