@@ -133,15 +133,45 @@ async def list_businesses(
     if featured is not None:
         query["is_featured"] = featured
     if q:
-        # Escape user input to prevent MongoDB regex DoS (ReDoS)
-        safe = re.escape(q.strip())
-        query["$or"] = [
-            {"name": {"$regex": safe, "$options": "i"}},
-            {"tags": {"$regex": safe, "$options": "i"}},
-            {"description": {"$regex": safe, "$options": "i"}},
-        ]
+        query["$and"] = _search_words(q)
     docs = await db.businesses.find(query, {"_id": 0}).limit(limit).to_list(limit)
     return docs
+
+
+# Where a word in the search box can match. This was name, tags and
+# description only, as one exact phrase, so in Goa "restaurant" found none of
+# its restaurants, "Panjim" missed Casa Sarita ("Fontainhas, Panjim") and
+# "sarita casa" found nothing.
+SEARCH_FIELDS = ("name", "tags", "description", "category", "address", "area")
+
+
+def _search_words(q: str) -> list:
+    """Each word must appear in some field; words may come in any order.
+
+    Words are regex-escaped, so input cannot build a pathological pattern
+    (ReDoS), and capped at six so a pasted paragraph stays cheap.
+    """
+    words = q.split()[:6]
+    return [
+        {"$or": [{f: {"$regex": re.escape(w), "$options": "i"}} for f in SEARCH_FIELDS]}
+        for w in words
+    ] or [{}]
+
+
+@router.get("/businesses/slug/{slug}")
+async def get_business_by_slug(slug: str):
+    """A listed place by its public slug, for shared links opened in the app.
+
+    explore91.com/place/<slug> opens the app on devices that have it, and the
+    app had no way to turn a slug into a place, so every shared link landed
+    on "Unmatched Route". Unlisted places are hidden, as on the web page.
+    """
+    doc = await db.businesses.find_one(
+        {"slug": slug, "is_approved": {"$ne": False}}, {"_id": 0}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Business not found")
+    return doc
 
 
 @router.get("/businesses/trending")
