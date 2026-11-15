@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 import requests
 from motor.motor_asyncio import AsyncIOMotorClient
+from booking_dates import future_date
 
 # Same guard as conftest: never let the mobile app's production URL aim
 # these destructive tests at live data.
@@ -438,7 +439,7 @@ class TestInputValidation:
         # guests=0 â†’ 422
         r1 = api_client.post(
             f"{BASE_URL}/api/bookings",
-            json={"business_id": biz_id, "date": "2026-06-01", "time": "19:00", "guests": 0},
+            json={"business_id": biz_id, "date": future_date(30), "time": "19:00", "guests": 0},
             headers=self._hdr(tok),
         )
         assert r1.status_code == 422, r1.text
@@ -446,7 +447,7 @@ class TestInputValidation:
         # guests=100 â†’ 422
         r2 = api_client.post(
             f"{BASE_URL}/api/bookings",
-            json={"business_id": biz_id, "date": "2026-06-01", "time": "19:00", "guests": 100},
+            json={"business_id": biz_id, "date": future_date(30), "time": "19:00", "guests": 100},
             headers=self._hdr(tok),
         )
         assert r2.status_code == 422, r2.text

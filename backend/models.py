@@ -1,8 +1,8 @@
 """Pydantic models for every domain (auth, catalog, bookings, reels, CMS)."""
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from core.security import ALLOWED_URL
 
@@ -289,13 +289,33 @@ class AdminReelUpdate(BaseModel):
 
 
 # --- Bookings & interactions ----------------------------------------------
+# Every venue is in India, which has one timezone and no daylight saving, so a
+# fixed offset is exact and needs no tz database (Windows Python has none).
+INDIA_TZ = timezone(timedelta(hours=5, minutes=30))
+
+
 class BookingCreate(BaseModel):
     business_id: str = Field(min_length=1, max_length=64)
-    date: str = Field(min_length=8, max_length=16)
-    time: str = Field(min_length=3, max_length=8)
+    # YYYY-MM-DD and 24-hour HH:MM, the formats the app sends. These used to
+    # be length checks only, which confirmed "notadate!" at "25:99".
+    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     guests: int = Field(default=2, ge=1, le=50)
     notes: Optional[str] = Field(default="", max_length=500)
     service_name: Optional[str] = Field(default=None, max_length=120)
+
+    @model_validator(mode="after")
+    def _slot_is_real_and_ahead(self):
+        """Refuse a date that is not on the calendar (2031-02-30) and a slot
+        that has already passed in India. Without this a booking for
+        2020-01-01 was confirmed and counted in revenue."""
+        try:
+            slot = datetime.strptime(f"{self.date} {self.time}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            raise ValueError(f"{self.date} isn't a real date.")
+        if slot.replace(tzinfo=INDIA_TZ) < datetime.now(INDIA_TZ):
+            raise ValueError("That time has already passed. Pick a later slot.")
+        return self
 
 
 class Booking(BaseModel):

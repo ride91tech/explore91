@@ -17,6 +17,7 @@ import pytest
 import requests
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
+from booking_dates import future_date
 
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _REPO_DIR = os.path.dirname(_BACKEND_DIR)
@@ -97,7 +98,7 @@ class TestBookingAmounts:
         svc = priced_business["services"][0]
         r = requests.post(f"{BASE_URL}/api/bookings", headers=admin["H"], json={
             "business_id": priced_business["business_id"],
-            "date": "2026-11-01", "time": "18:00", "guests": 2,
+            "date": future_date(1), "time": "18:00", "guests": 2,
             "service_name": svc["name"], "notes": "TESTv7_service",
         }, timeout=15)
         assert r.status_code == 200, r.text
@@ -108,7 +109,7 @@ class TestBookingAmounts:
     def test_reservation_without_service_is_flagged_estimate(self, admin, priced_business):
         r = requests.post(f"{BASE_URL}/api/bookings", headers=admin["H"], json={
             "business_id": priced_business["business_id"],
-            "date": "2026-11-02", "time": "20:00", "guests": 3,
+            "date": future_date(2), "time": "20:00", "guests": 3,
             "notes": "TESTv7_estimate",
         }, timeout=15)
         assert r.status_code == 200, r.text
@@ -119,7 +120,7 @@ class TestBookingAmounts:
     def test_unknown_service_name_falls_back_to_estimate(self, admin, priced_business):
         r = requests.post(f"{BASE_URL}/api/bookings", headers=admin["H"], json={
             "business_id": priced_business["business_id"],
-            "date": "2026-11-03", "time": "12:00", "guests": 1,
+            "date": future_date(3), "time": "12:00", "guests": 1,
             "service_name": "No Such Service On The Menu",
             "notes": "TESTv7_unknown",
         }, timeout=15)
@@ -138,12 +139,12 @@ class TestRevenueReporting:
 
         svc = priced_business["services"][0]
         r1 = requests.post(f"{BASE_URL}/api/bookings", headers=admin["H"], json={
-            "business_id": priced_business["business_id"], "date": "2026-11-05",
+            "business_id": priced_business["business_id"], "date": future_date(5),
             "time": "18:00", "guests": 2, "service_name": svc["name"],
             "notes": "TESTv7_gmv_service",
         }, timeout=15).json()
         r2 = requests.post(f"{BASE_URL}/api/bookings", headers=admin["H"], json={
-            "business_id": priced_business["business_id"], "date": "2026-11-06",
+            "business_id": priced_business["business_id"], "date": future_date(6),
             "time": "19:00", "guests": 2, "notes": "TESTv7_gmv_estimate",
         }, timeout=15).json()
 
@@ -159,7 +160,7 @@ class TestRevenueReporting:
         before = requests.get(f"{BASE_URL}/api/admin/reports/gmv?days=30",
                               headers=admin["H"], timeout=15).json()
         b = requests.post(f"{BASE_URL}/api/bookings", headers=admin["H"], json={
-            "business_id": priced_business["business_id"], "date": "2026-11-07",
+            "business_id": priced_business["business_id"], "date": future_date(7),
             "time": "21:00", "guests": 2, "notes": "TESTv7_cancelme",
         }, timeout=15).json()
 

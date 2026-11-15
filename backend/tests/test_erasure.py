@@ -22,6 +22,7 @@ import pytest
 import requests
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
+from booking_dates import future_date
 
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _REPO_DIR = os.path.dirname(_BACKEND_DIR)
@@ -131,7 +132,7 @@ def subject():
         await _insert("bookings", {
             "booking_id": f"bk_{uuid.uuid4().hex[:8]}", "user_id": uid,
             "business_id": biz_id, "notes": "allergic to peanuts",
-            "date": "2026-11-01", "time": "19:00", "guests": 2,
+            "date": future_date(1), "time": "19:00", "guests": 2,
             "created_at": now,
         })
         await _insert("businesses", {

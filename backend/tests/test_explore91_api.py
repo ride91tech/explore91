@@ -1,5 +1,6 @@
 """Explore91 backend end-to-end tests (public + protected)."""
 import pytest
+from booking_dates import future_date
 
 
 # ---- Health ---------------------------------------------------------------
@@ -241,7 +242,7 @@ class TestBookings:
 
         payload = {
             "business_id": biz_id,
-            "date": "2026-02-14",
+            "date": future_date(14),
             "time": "20:00",
             "guests": 2,
             "notes": "TEST_booking",

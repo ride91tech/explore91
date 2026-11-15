@@ -21,6 +21,15 @@ import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 
 const TIMES = ["12:30", "13:00", "13:30", "19:00", "19:30", "20:00", "20:30", "21:00"];
 
+/** True when `time` on `day` is already behind the device clock. The date row
+ *  starts at today, so without this you could pick 12:30 at 14:00. The API
+ *  refuses past slots too; this just stops people reaching that error. */
+function slotPassed(day: Date, time: string): boolean {
+  const [h, m] = time.split(":").map(Number);
+  const slot = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m);
+  return slot.getTime() < Date.now();
+}
+
 export default function BookScreen() {
   const { id, service } = useLocalSearchParams<{ id: string; service?: string }>();
   const insets = useSafeAreaInsets();
@@ -229,13 +238,16 @@ export default function BookScreen() {
             <Text style={[styles.label, { marginTop: spacing.xl }]}>Choose time</Text>
             <View style={styles.timeGrid}>
               {TIMES.map((t) => {
-                const active = t === time;
+                const passed = slotPassed(date, t);
+                const active = t === time && !passed;
                 return (
                   <Pressable
                     key={t}
                     testID={`time-${t}`}
                     onPress={() => setTime(t)}
-                    style={[styles.timeCell, active && styles.timeCellActive]}
+                    disabled={passed}
+                    accessibilityState={{ disabled: passed, selected: active }}
+                    style={[styles.timeCell, active && styles.timeCellActive, passed && styles.timeCellPast]}
                   >
                     <Text style={[styles.timeText, active && styles.dateActiveText]}>{t}</Text>
                   </Pressable>
@@ -300,6 +312,12 @@ export default function BookScreen() {
           disabled={submitting}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            if (step === 0 && slotPassed(date, time)) {
+              // Happens after switching the date to today with a time that
+              // has already gone; the greyed-out cell is not highlighted.
+              show("That time has already passed. Pick a later slot.", "error");
+              return;
+            }
             if (step === 0) setStep(1); else submit();
           }}
           style={[styles.primaryBtn, { flex: 1 }]}
@@ -381,6 +399,7 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   timeCellActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  timeCellPast: { opacity: 0.35 },
   timeText: { fontSize: tType.base, color: colors.onSurface, fontFamily: fonts.bodySemi },
 
   stepper: {
