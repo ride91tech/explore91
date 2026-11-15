@@ -23,6 +23,7 @@
         "backgroundColor": "#0B1F12"
       },
       "package": "com.explore91.app",
+      "versionCode": 2,
       "intentFilters": [
         {
           "action": "VIEW",
