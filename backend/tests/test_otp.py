@@ -873,3 +873,49 @@ class TestPhoneLogBackend:
         assert otp.whatsapp_configured() is False
         with pytest.raises(otp.OtpNotConfigured):
             _run(otp.send_code_whatsapp("+919876543210", "482913"))
+
+
+class TestKapsoSandbox:
+    """The sandbox cannot send templates, so codes go as plain text."""
+
+    def _env(self, monkeypatch):
+        monkeypatch.setenv("OTP_PHONE_BACKEND", "kapso-sandbox")
+        monkeypatch.setenv("OTP_PEPPER", PEPPER)
+        monkeypatch.setenv("KAPSO_API_KEY", KAPSO_ENV["KAPSO_API_KEY"])
+        monkeypatch.setenv("KAPSO_PHONE_NUMBER_ID", "sandbox-123")
+        monkeypatch.setenv("KAPSO_OTP_TEMPLATE", "")      # not needed here
+        monkeypatch.delenv("K_SERVICE", raising=False)
+
+    def test_needs_no_template(self, monkeypatch):
+        import core.otp as otp
+        self._env(monkeypatch)
+        assert otp.whatsapp_configured() is True
+
+    def test_sends_the_code_as_text_not_a_template(self, monkeypatch):
+        import core.otp as otp
+        self._env(monkeypatch)
+        seen = _mock_kapso(monkeypatch)
+        _run(otp.send_code_whatsapp("+919876543210", "482913"))
+        body = seen["json"]
+        assert seen["url"].endswith("/sandbox-123/messages")
+        assert body["type"] == "text", "the sandbox rejects templates"
+        assert "template" not in body
+        assert "482913" in body["text"]["body"]
+        assert body["to"] == "919876543210"
+
+    def test_refused_on_cloud_run(self, monkeypatch):
+        """It reaches only phones with an active sandbox session, so in
+        production it would silently fail every real user."""
+        import core.otp as otp
+        self._env(monkeypatch)
+        monkeypatch.setenv("K_SERVICE", "explore91-api")
+        assert otp.whatsapp_configured() is False
+        with pytest.raises(otp.OtpNotConfigured):
+            _run(otp.send_code_whatsapp("+919876543210", "482913"))
+
+    def test_a_rejected_send_is_still_a_failure(self, monkeypatch):
+        import core.otp as otp
+        self._env(monkeypatch)
+        _mock_kapso(monkeypatch, 400, {"error": {"code": 131047, "type": "OAuthException"}})
+        with pytest.raises(RuntimeError):
+            _run(otp.send_code_whatsapp("+919876543210", "482913"))

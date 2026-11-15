@@ -159,8 +159,15 @@ WhatsApp is not SMS, so **DLT does not apply**. Meta's own approval does, and
 sandbox number, a clean API, Meta's fees passed through with no markup), not
 Meta's.
 
-1. Create a Kapso account and project. **Test on the sandbox number first** —
-   it proves the integration end to end before Meta approves anything.
+1. Create a Kapso account and project, and test on the **sandbox number**
+   first. **The sandbox cannot send templates** — only text and interactive
+   messages — so run the backend locally with `OTP_PHONE_BACKEND=kapso-sandbox`,
+   which sends the code as plain text instead. That proves the account, the
+   key, number handling and the sign-in round trip on a real phone. It does
+   **not** prove the authentication template: only a connected production
+   number can. Sandbox mode is refused on Cloud Run, where it would quietly
+   fail every real user. To join, send the activation code from your phone to
+   the sandbox number; codes expire after 15 minutes.
 2. Connect a real number through Meta Embedded Signup. Meta must approve the
    **display name**, and **business verification** raises the messaging limit.
    This is the step with an unpredictable timeline — start it first.

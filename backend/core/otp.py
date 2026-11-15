@@ -233,10 +233,19 @@ _KAPSO_BASE = "https://api.kapso.ai/meta/whatsapp/v24.0"
 
 
 def _phone_backend() -> Optional[str]:
-    """`kapso` (the default) for real delivery, or `log` for local
-    development, mirroring OTP_EMAIL_BACKEND=log. Anything else is off."""
+    """Which phone delivery is in use. Anything unrecognised is off.
+
+      kapso          real delivery with the authentication template (default)
+      kapso-sandbox  Kapso's sandbox number. The sandbox cannot send
+                     templates at all - only text and interactive messages -
+                     so the code goes as plain text. Proves the account, the
+                     key, number handling and the sign-in round trip on a
+                     real phone; does NOT prove the template, which only a
+                     connected production number can.
+      log            codes to the server log, for local development
+    """
     b = (os.environ.get("OTP_PHONE_BACKEND") or "kapso").strip().lower()
-    return b if b in {"kapso", "log"} else None
+    return b if b in {"kapso", "kapso-sandbox", "log"} else None
 
 
 def whatsapp_configured() -> bool:
@@ -250,6 +259,12 @@ def whatsapp_configured() -> bool:
         return not os.environ.get("K_SERVICE")
     if backend == "kapso":
         return all(os.environ.get(k) for k in _KAPSO_REQUIRED)
+    if backend == "kapso-sandbox":
+        # The sandbox reaches only phones holding an active sandbox session,
+        # so on Cloud Run it would quietly fail every real user. Local only.
+        if os.environ.get("K_SERVICE"):
+            return False
+        return all(os.environ.get(k) for k in ("KAPSO_API_KEY", "KAPSO_PHONE_NUMBER_ID"))
     return False
 
 
@@ -294,6 +309,19 @@ async def send_code_whatsapp(phone_e164: str, code: str) -> None:
         logger.warning("Phone OTP for local development: %s -> %s", phone_e164, code)
         return
     to = phone_e164.lstrip("+")
+    if _phone_backend() == "kapso-sandbox":
+        if os.environ.get("K_SERVICE"):
+            raise OtpNotConfigured("the Kapso sandbox is refused on Cloud Run")
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "text",
+            "text": {"body": f"{code} is your Explore91 sign-in code. "
+                             "It expires in 10 minutes and works once."},
+        }
+        await _post_kapso(payload)
+        return
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
@@ -309,6 +337,11 @@ async def send_code_whatsapp(phone_e164: str, code: str) -> None:
             ],
         },
     }
+    await _post_kapso(payload)
+
+
+async def _post_kapso(payload: dict) -> None:
+    """Send one message through Kapso and insist Meta accepted it."""
     url = f"{_KAPSO_BASE}/{os.environ['KAPSO_PHONE_NUMBER_ID']}/messages"
     async with _http_client() as client:
         r = await client.post(
