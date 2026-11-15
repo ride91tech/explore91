@@ -1,8 +1,17 @@
 # Deployment plan 001 — the auth-swap release
 
-**Status:** awaiting approval. Nothing has been deployed.
-**Deploying:** `main` @ `1014350`, 11 commits ahead of production.
-**Currently serving:** `explore91-api-00006-hqx`, 100% of traffic.
+**Status:** shipped. This began as a one-off plan for the auth-swap release
+and has since been used as the standing deploy procedure, so §5-§7 are
+maintained; the rest is kept as the record of that release.
+
+**Last deploy:** 2026-11-15, `explore91-api-00025-sag` (erasure endpoint,
+consent on every sign-in path).
+
+> **Do not hardcode the serving revision in this document.** An earlier
+> version named `explore91-api-00006-hqx` as the rollback target. Nineteen
+> revisions later it still said so, which is worse than saying nothing: a
+> rollback during a real incident would have routed traffic to code from
+> months earlier. §5 step 0 now captures the live revision at deploy time.
 
 ---
 
@@ -55,17 +64,22 @@ preserving `user_id`, `wallet_points`, `roles` and `home_city`.
 
 ---
 
-## 3. Environment variables to set with the deploy
+## 3. Environment variables on production
 
-Four are new. Deploying without them is not fatal but degrades behaviour.
+All eight below are **already set on production** and carry forward with
+every deploy that does not pass `--set-env-vars` (see §5). This table is now
+a record of what exists and why, not a list of things to set.
 
-| Variable | Value | If omitted |
+| Variable | Current value | If it went missing |
 |---|---|---|
-| `PUBLIC_BASE_URL` | `https://explore91-api-5hkjrcxhjq-el.a.run.app` for now; the real domain once it points here | Link previews fall back to the request origin — wrong behind a proxy |
-| `TRUSTED_PROXY_HOPS` | `1` | Defaults to 1 anyway; set it explicitly so it is visible |
-| `ALLOWED_ORIGINS` | the admin console origin, once deployed | Stays `*` — open to any origin |
-| `ANDROID_CERT_FINGERPRINTS` | the debug + upload SHA-256 pair | `assetlinks.json` serves `[]`; deep links will not verify |
-| `DEV_AUTH_ENABLED` | `true` — **set deliberately, 2026-10-24** | Unset is the safe default. See the note below |
+| `MONGO_URL` | secret reference | The service cannot start |
+| `DB_NAME` | `explore91` | Wrong or missing database |
+| `ADMIN_EMAILS` | two addresses | Nobody can reach the admin console |
+| `PUBLIC_BASE_URL` | `https://explore91.com` — set 2026-10-25 when the domain went live | `canonical` and `og:url` on every server-rendered page point at the Cloud Run host, so search engines and link unfurls use the wrong address |
+| `TRUSTED_PROXY_HOPS` | `1` | Defaults to 1 anyway; set explicitly so it is visible |
+| `ALLOWED_ORIGINS` | `explore91.com`, `www.explore91.com`, `explore91.vercel.app` — set 2026-10-25 | Falls back to `*`, open to every origin. Note that setting it also flips `allow_credentials` to true, which is correct here because auth is a bearer token |
+| `ANDROID_CERT_FINGERPRINTS` | debug + upload SHA-256 pair | `assetlinks.json` serves `[]` and deep links stop verifying |
+| `DEV_AUTH_ENABLED` | `true` — **set deliberately, 2026-10-24**; still open as of 2026-11-15 | Unset is the safe default. See §10 |
 
 ---
 
@@ -73,10 +87,13 @@ Four are new. Deploying without them is not fatal but degrades behaviour.
 
 Each must pass. Any failure stops the deploy.
 
-1. **CI green on the commit being deployed.** Not yet possible — the push to
-   GitHub is blocked on the PAT's missing `workflow` scope, so CI has never
-   run. Until then the local equivalent stands in: 221 passed, 4 skipped,
-   verified across four parallel and two serial runs.
+1. **CI green on the commit being deployed**, or the local equivalent: the
+   backend suite, run several times rather than once. It is **301 passed, 5
+   skipped** as of 2026-11-15, up from 221 when this was written. Run it more
+   than once on purpose — two tests in it are known to fail intermittently
+   (`test_security.py::TestSEC003RateLimitBypass::test_429_carries_retry_after`
+   and `test_admin_v7.py::TestRevenueReporting::test_cancelled`), and a single
+   green run tells you less than you think.
 2. **Runtime-only install boots.** A clean virtualenv on `requirements.txt`
    alone imports the app — already verified, 27 packages.
 3. **Image builds.** Cloud Build must succeed; the Dockerfile lost its
@@ -97,23 +114,51 @@ Each must pass. Any failure stops the deploy.
 Deploy with **no traffic**, verify the new revision directly, then move
 traffic in steps.
 
+> **Never pass `--set-env-vars` on a routine deploy.** It *replaces* the
+> whole environment rather than adding to it. The version of this section
+> written for release 001 listed three variables; production now carries
+> eight, so running it verbatim silently drops `MONGO_URL`, `DB_NAME`,
+> `ADMIN_EMAILS`, `ALLOWED_ORIGINS` and `DEV_AUTH_ENABLED` — the service
+> comes up unable to reach the database, with CORS reopened to every origin.
+> Omit the flag and the per-revision env carries forward, which is the same
+> property §6 relies on for rollback. To change one variable, use
+> `--update-env-vars` as its own deploy, with a flags-file if the value
+> contains a comma (see `deploy/allowed-origins.yaml`).
+
 ```bash
-# 1. Build and deploy, serving nothing yet.
-gcloud run deploy explore91-api --source backend --project explore91 \
-  --region asia-south1 --no-traffic --tag next \
-  --set-env-vars "^|^PUBLIC_BASE_URL=...|TRUSTED_PROXY_HOPS=1|ANDROID_CERT_FINGERPRINTS=..."
+# 0. Capture what is serving NOW. This is the rollback target; write it down.
+gcloud.cmd run services describe explore91-api --project explore91 \
+  --region asia-south1 --format="value(status.traffic.revisionName)"
 
-# 2. Smoke the tagged revision directly (see §7). It has its own URL and
-#    takes no production traffic.
+# 1. Build and deploy, serving nothing yet. No env flags - see above.
+gcloud.cmd run deploy explore91-api --source backend --project explore91 \
+  --region asia-south1 --no-traffic --tag next
 
-# 3. 10% for 15 minutes, watching error rate and p95 latency.
-gcloud run services update-traffic explore91-api --project explore91 \
+# 2. Smoke the tagged revision directly (see §7). It has its own URL at
+#    https://next---explore91-api-5hkjrcxhjq-el.a.run.app and takes no
+#    production traffic. Confirm the eight env vars survived, not merely
+#    that it answers 200: a Mongo-backed read, a CORS probe and the
+#    canonical tag each prove a different variable is still there.
+
+# 3. 10% while there is traffic to watch. See the note below.
+gcloud.cmd run services update-traffic explore91-api --project explore91 \
   --region asia-south1 --to-tags next=10
 
 # 4. 100% once clean.
-gcloud run services update-traffic explore91-api --project explore91 \
+gcloud.cmd run services update-traffic explore91-api --project explore91 \
   --region asia-south1 --to-latest
 ```
+
+> **`gcloud.cmd`, not `gcloud`.** PowerShell's execution policy is
+> `Restricted` on the dev machine, so the `.ps1` shim fails with a
+> `SecurityError`. Git Bash can use bare `gcloud`.
+
+> **On the 15-minute soak at 10%:** its purpose is to catch errors under real
+> load. Pre-launch there is no load, so holding for fifteen minutes produces
+> no signal and the step becomes theatre. Until there are users, send a burst
+> of requests across the split, confirm they are clean, and promote. Once the
+> app is public, hold the soak properly, watch error rate and p95 — and
+> delete this note.
 
 **Do not ship the APK in the same change window.** The API goes first and
 stays backward-compatible; the app build follows only once the API is stable.
@@ -125,24 +170,32 @@ An installed app cannot be rolled back.
 
 | Layer | How | Time |
 |---|---|---|
-| API | Route traffic back to `explore91-api-00006-hqx` | Seconds |
+| API | Route traffic back to the revision captured in §5 step 0 | Seconds |
 | Config | Env is baked per revision, so the rollback restores it too | Seconds |
 | Database | **None, and none needed** — all changes are additive | — |
 | Installed app | **Impossible.** Mitigated only by shipping the API first | — |
 
 ```bash
-gcloud run services update-traffic explore91-api --project explore91 \
-  --region asia-south1 --to-revisions explore91-api-00006-hqx=100
+# <PREVIOUS> is what §5 step 0 printed before this deploy. If it was not
+# captured, list the revisions and pick the one that was serving:
+gcloud.cmd run revisions list --service explore91-api --project explore91 \
+  --region asia-south1 --format="table(name, creationTimestamp)" --limit 10
+
+gcloud.cmd run services update-traffic explore91-api --project explore91 \
+  --region asia-south1 --to-revisions <PREVIOUS>=100
 ```
 
 **Roll back if:** 5xx rate rises above baseline, p95 latency doubles, `/api/`
 stops answering, or auth behaves differently from §7.
 
-One caveat worth stating: rolling back the API does **not** un-hash session
-tokens. Rows upgraded under the new revision stay hashed, and `00006` looks
-sessions up by raw token — so anyone who made a request during the canary
-would be signed out by a rollback. They can sign in again; nothing is lost.
-It is the one non-reversible effect in this release.
+~~One caveat worth stating: rolling back the API does **not** un-hash session
+tokens...~~ **No longer applies.** That caveat was about rolling back to
+`00006`, which predated session-token hashing. Every revision you could now
+roll back to hashes them, so a rollback no longer signs anyone out.
+
+The caveat it leaves behind is the general one: a rollback restores code and
+env, not data. Check whether the release wrote anything that an older
+revision cannot read before assuming a rollback is clean.
 
 ---
 
@@ -164,9 +217,17 @@ Against the tagged revision before any traffic, then again at 100%.
 | 9b | `POST /api/auth/dev` with any email | **200 while the test window is open** (see §10); **404** once it is closed, which is the state to return to |
 | 10 | `GET /api/auth/me` with an existing session token | **200** — continuity held |
 | 11 | `GET /api/admin/stats` without a token | 401 |
+| 12 | `DELETE /api/auth/me` without a token | **401, not 405.** 405 means the route is missing, i.e. the backend is older than the web app, which ships a Delete button |
+| 13 | `GET /api/categories` with `Origin: https://explore91.com` | `access-control-allow-origin` echoed back — proves `ALLOWED_ORIGINS` survived the deploy |
+| 14 | the same with `Origin: https://evil.example.com` | **no** `access-control-allow-origin` header. The body is still 200; CORS is enforced by the browser on the missing header, not by the server refusing |
+| 15 | `GET /place/{slug}` | `canonical` points at `explore91.com`, not a `run.app` host — proves `PUBLIC_BASE_URL` survived |
 
 **Test 10 is the one that matters.** It is the difference between "login is
 temporarily unavailable" and "everyone was signed out."
+
+**Tests 13-15 exist because `--set-env-vars` was once in §5.** Each proves a
+different variable is still present. A revision with a wiped environment
+answers 200 on `/api/` and looks healthy right up until someone signs in.
 
 ---
 
@@ -182,7 +243,7 @@ temporarily unavailable" and "everyone was signed out."
   instant.
 
 ```bash
-gcloud run services logs read explore91-api --project explore91 \
+gcloud.cmd run services logs read explore91-api --project explore91 \
   --region asia-south1 --limit 100
 ```
 
@@ -204,11 +265,17 @@ login.** Recording it here because every other line in this document says not
 to, and a future reader following those lines would switch it off without
 knowing it was a decision.
 
+**Still open as of 2026-11-15, reaffirmed by the owner on 2026-10-25** after
+the domain went live. The risk changed that day and the decision did not: the
+bypass used to sit behind an unguessable `run.app` hostname and now sits
+behind `explore91.com/admin`, which is the first address anyone would try. It
+should not outlive OTP (roadmap §8d), where closing it is step 0.1e.
+
 What it means while it is on:
 
 - Anyone who knows the API URL can `POST /api/auth/dev` with any email and
   get a valid session. There is no credential.
-- `ADMIN_EMAILS` is `valencio@ride91.green`. Signing in as that address and
+- `ADMIN_EMAILS` is `valencio@ride91.green,valencio.vr7@gmail.com`. Signing in as either and
   calling `POST /auth/roles` grants admin, which is the whole admin console
   over the real `explore91` database.
 - The URL is not secret: it is compiled into every APK.
@@ -216,7 +283,7 @@ What it means while it is on:
 To close it:
 
 ```bash
-gcloud run services update explore91-api --project explore91   --region asia-south1 --remove-env-vars DEV_AUTH_ENABLED
+gcloud.cmd run services update explore91-api --project explore91   --region asia-south1 --remove-env-vars DEV_AUTH_ENABLED
 ```
 
 To close only the admin escalation while leaving consumer sign-in working —
@@ -224,7 +291,7 @@ the admin console is web-only, so this costs nothing for testing from a
 phone:
 
 ```bash
-gcloud run services update explore91-api --project explore91   --region asia-south1 --remove-env-vars ADMIN_EMAILS
+gcloud.cmd run services update explore91-api --project explore91 \n  --region asia-south1 --remove-env-vars ADMIN_EMAILS
 ```
 
 Either takes effect on the next revision, within about a minute. Afterwards,
