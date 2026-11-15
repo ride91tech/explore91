@@ -281,6 +281,7 @@ export default function BookScreen() {
               testID="notes-input"
               value={notes}
               onChangeText={setNotes}
+              maxLength={500}
               placeholder="Anniversary dinner, window seat, allergies…"
               placeholderTextColor={colors.onSurfaceTertiary}
               multiline

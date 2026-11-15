@@ -20,6 +20,24 @@ export async function loadToken(): Promise<string | null> {
 
 export type FetchOptions = RequestInit & { auth?: boolean };
 
+/**
+ * FastAPI's `detail` is a string for errors we raise ourselves, but a list of
+ * `{loc, msg}` objects when request validation fails (422). Passing that list
+ * to `new Error()` made the message "[object Object]", which is what every
+ * toast showed for a rejected form. Pydantic prefixes validator messages with
+ * "Value error, "; that is for developers, so drop it.
+ */
+export function detailMessage(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((e: any) => String(e?.msg ?? "").replace(/^Value error, /, ""))
+      .filter(Boolean)
+      .join(" ");
+  }
+  return "";
+}
+
 async function request(path: string, opts: FetchOptions = {}): Promise<Response> {
   const url = `${BASE}/api${path}`;
   const headers: Record<string, string> = {
@@ -35,7 +53,7 @@ async function request(path: string, opts: FetchOptions = {}): Promise<Response>
     let msg = res.statusText;
     try {
       const j = await res.json();
-      msg = j.detail || msg;
+      msg = detailMessage(j.detail) || msg;
     } catch {}
     const err: any = new Error(msg);
     err.status = res.status;
