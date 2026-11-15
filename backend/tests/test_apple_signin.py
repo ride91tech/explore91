@@ -445,6 +445,82 @@ class TestAppleSignInHappyPath:
         assert r2.status_code == 200, r2.text
         assert r2.json()["apple_sub"] == sub
 
+    def test_new_account_records_consent(self, app_client):
+        """Apple creates accounts too. It recorded nothing, which left the
+        only covered sign-in path the one scheduled for deletion at OTP."""
+        mod, client = app_client
+        sub = f"TEST_APPLE_SUB_{uuid.uuid4().hex[:8]}"
+        email = f"test_apple_hp_consent_{uuid.uuid4().hex[:6]}@explore91.dev"
+
+        async def fake_verify(_tok):
+            return {"sub": sub, "email": email}
+
+        from routes import auth as auth_mod
+        auth_mod._verify_apple_identity_token = fake_verify
+        r = client.post(
+            "/api/auth/apple",
+            json={"identity_token": "x" * 20, "full_name": "Apple Consenter",
+                  "is_adult": True},
+            headers=_as_fresh_client(),
+        )
+        assert r.status_code == 200, r.text
+
+        async def _read():
+            c = AsyncIOMotorClient(MONGO_URL)
+            row = await c[DB_NAME].users.find_one({"apple_sub": sub}, {"_id": 0})
+            c.close()
+            return row
+
+        row = asyncio.get_event_loop().run_until_complete(_read())
+        assert row is not None
+        consent = row.get("consent") or {}
+        assert consent.get("notice_version"), "Apple account carries no consent"
+        assert consent.get("granted_at")
+        assert consent.get("purposes")
+        assert row.get("is_adult_confirmed") is True
+
+    def test_returning_apple_account_without_consent_is_backfilled(self, app_client):
+        """Apple accounts created before this work must pick up a record on
+        the next sign-in, exactly as the email path does."""
+        mod, client = app_client
+        sub = f"TEST_APPLE_SUB_{uuid.uuid4().hex[:8]}"
+        email = f"test_apple_hp_legacy_{uuid.uuid4().hex[:6]}@explore91.dev"
+
+        async def _seed():
+            c = AsyncIOMotorClient(MONGO_URL)
+            await c[DB_NAME].users.insert_one({
+                "user_id": f"user_{uuid.uuid4().hex[:12]}", "email": email,
+                "name": "Apple Legacy", "picture": None, "wallet_points": 0,
+                "home_city": "Goa", "roles": ["customer"], "apple_sub": sub,
+                "created_at": datetime.now(timezone.utc),
+            })
+            c.close()
+
+        async def _read():
+            c = AsyncIOMotorClient(MONGO_URL)
+            row = await c[DB_NAME].users.find_one({"apple_sub": sub}, {"_id": 0})
+            c.close()
+            return row
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(_seed())
+
+        async def fake_verify(_tok):
+            return {"sub": sub, "email": email}
+
+        from routes import auth as auth_mod
+        auth_mod._verify_apple_identity_token = fake_verify
+        r = client.post(
+            "/api/auth/apple",
+            json={"identity_token": "x" * 20, "is_adult": True},
+            headers=_as_fresh_client(),
+        )
+        assert r.status_code == 200, r.text
+
+        row = loop.run_until_complete(_read())
+        assert (row.get("consent") or {}).get("notice_version"),             "a returning Apple user ticked the box and nothing was recorded"
+        assert row.get("is_adult_confirmed") is True
+
     def test_second_call_same_sub_reuses_user(self, app_client):
         mod, client = app_client
         sub = f"TEST_APPLE_SUB_{uuid.uuid4().hex[:8]}"

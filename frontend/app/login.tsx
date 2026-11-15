@@ -71,10 +71,18 @@ export default function Login() {
   };
 
   const handleApple = async () => {
+    // Belt and braces with the dimmed wrapper below: the consent box gates
+    // this path too. It did not, which meant one tap on the Apple button
+    // created an account with nothing recorded - and Apple is the path that
+    // outlives DEV_AUTH_ENABLED.
+    if (!agreed) {
+      setError("Please confirm you are 18 or older and agree to the Privacy Notice.");
+      return;
+    }
     setError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await signInWithApple();
+      await signInWithApple(agreed);
     } catch (e: any) {
       // Apple returns { code: 'ERR_REQUEST_CANCELED' } when user cancels — swallow.
       if (e?.code !== "ERR_REQUEST_CANCELED" && e?.code !== "ERR_CANCELED") {
@@ -146,7 +154,11 @@ export default function Login() {
           </Text>
 
           {appleAvailable ? (
-            <View testID="apple-signin-wrap" style={{ marginTop: spacing.md }}>
+            <View
+              testID="apple-signin-wrap"
+              pointerEvents={agreed ? "auto" : "none"}
+              style={{ marginTop: spacing.md, opacity: agreed ? 1 : 0.4 }}
+            >
               <AppleAuthentication.AppleAuthenticationButton
                 buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
                 buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}

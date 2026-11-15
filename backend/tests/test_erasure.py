@@ -48,6 +48,10 @@ def _unique_ip() -> str:
     )
 
 
+# Seeded addresses are lowercase on purpose: dev sign-in lowercases the
+# address before looking it up, so a mixed-case seed is never matched and the
+# handler quietly creates a SECOND account - which made a backfill test fail
+# while inspecting the untouched original.
 def _signin(email: str, name: str):
     return requests.post(
         f"{BASE_URL}/api/auth/dev",
@@ -97,7 +101,7 @@ def subject():
     of these endpoints need a real business, and the point here is the
     erasure cascade, not the happy path of six other features.
     """
-    email = f"TEST_erase_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
+    email = f"test_erase_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
     uid = f"user_{uuid.uuid4().hex[:12]}"
     token = f"test_{uuid.uuid4().hex}"
     biz_id = f"TEST_erase_biz_{uuid.uuid4().hex[:8]}"
@@ -244,10 +248,70 @@ class TestGuards:
 
 
 class TestConsentRecord:
+    def _legacy_user(self, email: str) -> str:
+        """An account as it exists today: created before consent was recorded."""
+        uid = f"user_{uuid.uuid4().hex[:12]}"
+        _run(_insert("users", {
+            "user_id": uid, "email": email, "name": "Legacy",
+            "picture": None, "wallet_points": 0, "home_city": "Goa",
+            "roles": ["customer"], "created_at": datetime.now(timezone.utc),
+        }))
+        return uid
+
+    def test_a_returning_account_without_consent_is_backfilled(self):
+        """Every account that predates this work signs in with the box ticked.
+        Recording consent only for new accounts leaves exactly the existing
+        population permanently unanswerable."""
+        email = f"test_legacy_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
+        uid = self._legacy_user(email)
+        try:
+            assert _signin(email, "Legacy").status_code == 200
+            row = _run(_find("users", {"user_id": uid}))
+            assert (row.get("consent") or {}).get("notice_version"),                 "a returning user ticked the box and nothing was recorded"
+            assert row.get("is_adult_confirmed") is True
+        finally:
+            _run(_drop("users", {"user_id": uid}))
+            _run(_drop("user_sessions", {"user_id": uid}))
+
+    def test_an_existing_consent_is_not_restamped(self):
+        """The first affirmative action is the record. Rewriting granted_at on
+        every sign-in would destroy the only thing that makes it useful."""
+        email = f"test_restamp_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
+        uid = self._legacy_user(email)
+        try:
+            assert _signin(email, "Legacy").status_code == 200
+            first = _run(_find("users", {"user_id": uid}))["consent"]["granted_at"]
+            assert _signin(email, "Legacy").status_code == 200
+            second = _run(_find("users", {"user_id": uid}))["consent"]["granted_at"]
+            assert first == second, "signing in again rewrote the consent timestamp"
+        finally:
+            _run(_drop("users", {"user_id": uid}))
+            _run(_drop("user_sessions", {"user_id": uid}))
+
+    def test_a_client_that_sends_no_signal_records_no_consent(self):
+        """An older app build must not manufacture agreement for a user who
+        was never shown the box."""
+        email = f"test_nosignal_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
+        uid = self._legacy_user(email)
+        try:
+            r = requests.post(
+                f"{BASE_URL}/api/auth/dev",
+                json={"email": email, "name": "Legacy"},   # no is_adult
+                headers={"X-Forwarded-For": _unique_ip()},
+                timeout=20,
+            )
+            assert r.status_code == 200, r.text
+            row = _run(_find("users", {"user_id": uid}))
+            assert not row.get("consent"), "consent was invented from silence"
+            assert not row.get("is_adult_confirmed")
+        finally:
+            _run(_drop("users", {"user_id": uid}))
+            _run(_drop("user_sessions", {"user_id": uid}))
+
     def test_a_new_account_records_what_it_consented_to(self):
         """DPDP s6 wants consent that is specific and recorded. "They
         agreed" must be answerable with a version and a timestamp."""
-        email = f"TEST_consent_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
+        email = f"test_consent_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
         r = _signin(email, "Consenter")
         assert r.status_code == 200, r.text
         uid = r.json()["user"]["user_id"]

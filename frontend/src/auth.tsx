@@ -17,7 +17,7 @@ type Ctx = {
   loading: boolean;
   signIn: (email: string, name?: string, isAdult?: boolean) => Promise<void>;
   deleteAccount: () => Promise<void>;
-  signInWithApple: () => Promise<void>;
+  signInWithApple: (isAdult?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const signInWithApple = useCallback(async () => {
+  const signInWithApple = useCallback(async (isAdult = false) => {
     if (Platform.OS !== "ios") {
       throw new Error("Apple sign-in is only available on iOS.");
     }
@@ -117,6 +117,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         identity_token: credential.identityToken,
         email: credential.email ?? null,
         full_name: fullName,
+        // Apple verifies who they are, not what they agreed to - the consent
+        // signal still has to come from our screen. See core/consent.py.
+        is_adult: isAdult,
       }),
     });
     await setToken(res.session_token);

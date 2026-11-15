@@ -63,6 +63,11 @@ class AppleSignInRequest(BaseModel):
     identity_token: str = Field(min_length=8, max_length=4096)
     email: Optional[str] = Field(default=None, max_length=254)
     full_name: Optional[str] = Field(default=None, max_length=120)
+    # Same affirmative action as the email path - see core/consent.py. Apple
+    # verifies the identity, not the consent, so the client still has to send
+    # it. Defaults False: an older build that omits it records nothing rather
+    # than manufacturing agreement.
+    is_adult: bool = False
 
 
 class RoleUpgrade(BaseModel):

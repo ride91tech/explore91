@@ -22,11 +22,10 @@ from core.config import (
     APPLE_AUDIENCES,
     APPLE_ISSUER,
     APPLE_JWKS_URL,
-    CONSENT_PURPOSES,
-    PRIVACY_NOTICE_VERSION,
     SESSION_TTL_DAYS,
     dev_auth_enabled,
 )
+from core.consent import backfill_fields, consent_fields
 from core.db import db
 from core.erasure import erase_user
 from core.security import (
@@ -209,12 +208,17 @@ async def dev_sign_in(request: Request):
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
         user_id = existing["user_id"]
+        set_fields: dict = {}
         # Only fill a blank name; never overwrite one the user has set.
         if payload.name and not existing.get("name"):
-            await db.users.update_one({"user_id": user_id}, {"$set": {"name": name}})
-            user_doc = {**existing, "name": name}
-        else:
-            user_doc = existing
+            set_fields["name"] = name
+        # Accounts predating the consent work have no record of it. The user
+        # just ticked the box to get here, so capture it rather than leaving
+        # every existing account permanently unanswerable.
+        set_fields.update(backfill_fields(existing, payload.is_adult, now))
+        if set_fields:
+            await db.users.update_one({"user_id": user_id}, {"$set": set_fields})
+        user_doc = {**existing, **set_fields}
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_doc = {
@@ -226,16 +230,7 @@ async def dev_sign_in(request: Request):
             "home_city": "Goa",
             "roles": ["customer"],
             "created_at": now,
-            # DPDP s6 wants consent that is informed and recorded, not
-            # inferred. We store which notice the user was shown and when,
-            # so "they agreed" is answerable with a version and a timestamp
-            # rather than an assurance.
-            "consent": {
-                "notice_version": PRIVACY_NOTICE_VERSION,
-                "granted_at": now,
-                "purposes": list(CONSENT_PURPOSES),
-            },
-            "is_adult_confirmed": bool(getattr(payload, "is_adult", False)),
+            **consent_fields(payload.is_adult, now),
         }
         await db.users.insert_one(dict(user_doc))
         user_doc.pop("_id", None)
@@ -284,6 +279,7 @@ async def apple_sign_in(payload: AppleSignInRequest, request: Request):
         if not existing.get("name") or existing["name"] == "Apple User":
             if payload.full_name:
                 set_fields["name"] = payload.full_name
+        set_fields.update(backfill_fields(existing, payload.is_adult, now))
         if set_fields:
             await db.users.update_one({"user_id": user_id}, {"$set": set_fields})
         user_doc = {**existing, **set_fields}
@@ -303,6 +299,7 @@ async def apple_sign_in(payload: AppleSignInRequest, request: Request):
             "roles": ["customer"],
             "apple_sub": apple_sub,
             "created_at": now,
+            **consent_fields(payload.is_adult, now),
         }
         try:
             await db.users.insert_one(dict(user_doc))
