@@ -25,7 +25,11 @@ from core.config import (
     SESSION_TTL_DAYS,
     dev_auth_enabled,
 )
-from core.consent import backfill_fields, consent_fields
+from core.consent import (
+    backfill_fields,
+    consent_fields,
+    require_adult_for_new_account,
+)
 from core.db import db
 from core.erasure import erase_user
 from core.security import (
@@ -220,6 +224,7 @@ async def dev_sign_in(request: Request):
             await db.users.update_one({"user_id": user_id}, {"$set": set_fields})
         user_doc = {**existing, **set_fields}
     else:
+        require_adult_for_new_account(payload.is_adult)
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_doc = {
             "user_id": user_id,
@@ -288,6 +293,7 @@ async def apple_sign_in(payload: AppleSignInRequest, request: Request):
             raise HTTPException(
                 status_code=400, detail="Email is required on first Apple sign-in"
             )
+        require_adult_for_new_account(payload.is_adult)
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_doc = {
             "user_id": user_id,

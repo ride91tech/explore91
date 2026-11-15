@@ -428,7 +428,7 @@ class TestAppleSignInHappyPath:
         from routes import auth as auth_mod
         auth_mod._verify_apple_identity_token = fake_verify
         r = client.post("/api/auth/apple",
-                        json={"identity_token": "x" * 20, "full_name": "Apple New"},
+                        json={"identity_token": "x" * 20, "is_adult": True, "full_name": "Apple New"},
                         headers=_as_fresh_client())
         assert r.status_code == 200, r.text
         body = r.json()
@@ -478,6 +478,33 @@ class TestAppleSignInHappyPath:
         assert consent.get("granted_at")
         assert consent.get("purposes")
         assert row.get("is_adult_confirmed") is True
+
+    def test_new_apple_account_without_the_confirmation_is_refused(self, app_client):
+        """The gate has to sit on both creation paths, or the one that
+        outlives DEV_AUTH_ENABLED is ungated."""
+        mod, client = app_client
+        sub = f"TEST_APPLE_SUB_{uuid.uuid4().hex[:8]}"
+        email = f"test_apple_hp_minor_{uuid.uuid4().hex[:6]}@explore91.dev"
+
+        async def fake_verify(_tok):
+            return {"sub": sub, "email": email}
+
+        from routes import auth as auth_mod
+        auth_mod._verify_apple_identity_token = fake_verify
+        r = client.post(
+            "/api/auth/apple",
+            json={"identity_token": "x" * 20, "full_name": "Apple Minor"},
+            headers=_as_fresh_client(),
+        )
+        assert r.status_code == 403, r.text
+
+        async def _read():
+            c = AsyncIOMotorClient(MONGO_URL)
+            row = await c[DB_NAME].users.find_one({"apple_sub": sub}, {"_id": 0})
+            c.close()
+            return row
+
+        assert asyncio.get_event_loop().run_until_complete(_read()) is None,             "a refused Apple sign-up still created an account"
 
     def test_returning_apple_account_without_consent_is_backfilled(self, app_client):
         """Apple accounts created before this work must pick up a record on
@@ -532,7 +559,7 @@ class TestAppleSignInHappyPath:
         auth_mod._verify_apple_identity_token = fake_verify
 
         r1 = client.post("/api/auth/apple",
-                         json={"identity_token": "x" * 20, "full_name": "Apple Reuse"},
+                         json={"identity_token": "x" * 20, "is_adult": True, "full_name": "Apple Reuse"},
                          headers=_as_fresh_client())
         assert r1.status_code == 200, r1.text
         uid1 = r1.json()["user"]["user_id"]

@@ -132,11 +132,13 @@ export default function Privacy() {
 
         <Section title="Children">
           <P>
-            Explore91 is for adults. The Act requires verifiable parental consent
-            before processing the data of anyone under 18, and we are not set up
-            to obtain it, so we ask you to confirm you are 18 or older when you
-            sign up. If you believe a child has created an account, write to us
-            and we will delete it.
+            Explore91 is for adults. The Act requires verifiable parental
+            consent before processing the data of anyone under 18, and we are
+            not set up to obtain it, so we do not knowingly accept anyone
+            younger. You confirm you are 18 or older when you sign up, and an
+            account is not created without that confirmation. A self-declared
+            tick is not the verification the Act describes, so if you believe a
+            child has an account, write to us and we will delete it.
           </P>
         </Section>
 

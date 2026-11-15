@@ -46,16 +46,33 @@ _DELETE = (
     "tickets",
 )
 
-# Rows worth keeping, with the identity stripped out. The second element is
-# the fields to clear outright - display names and anything else that
-# identifies a person rather than linking a row.
+# Rows worth keeping, with the identity stripped out. Each entry is
+# (collection, key field, fields to blank, extra query terms).
+#
+# The key field is not always `user_id`. The first version of this tuple
+# assumed it was, which is how two collections went unnoticed: admin_audit
+# keys on `actor_id` and fraud_flags on `entity_id`, so neither was matched
+# by anything here and both survived erasure intact.
 _ANONYMISE = (
     # `user_name` is the author's display name, shown on the business page.
-    ("reviews", ("user_name",)),
+    ("reviews", "user_id", ("user_name",), {}),
     # A booking carries no name or phone - the business identifies the
     # customer by the booking id - but `notes` is free text the user typed
     # and can hold anything, so it goes.
-    ("bookings", ("notes",)),
+    ("bookings", "user_id", ("notes",), {}),
+    # Audit rows record WHO did an admin action, by id, email and name. The
+    # email is directly identifying and outlived erasure entirely. The row
+    # itself has to stay - an audit trail with holes in it is not an audit
+    # trail - so the action and its target survive and the actor becomes a
+    # tombstone.
+    ("admin_audit", "actor_id", ("actor_email", "actor_name"), {}),
+    # A fraud flag on a user points at them by id. Abuse records have a
+    # retention argument, so the flag stays and stops pointing at a person.
+    # `reason` is deliberately NOT blanked: it is the admin's record of why,
+    # and blanking it empties the flag of meaning. That does mean an admin
+    # who types a name or address into `reason` defeats this - a problem to
+    # police when the flag is written, not when it is erased.
+    ("fraud_flags", "entity_id", (), {"entity_type": "user"}),
 )
 
 # Business listings administered by this user. Not their personal data.
@@ -76,10 +93,10 @@ async def erase_user(user_id: str) -> Dict[str, int]:
         r = await db[name].delete_many({"user_id": user_id})
         report[name] = r.deleted_count
 
-    for name, pii_fields in _ANONYMISE:
+    for name, key, pii_fields, extra in _ANONYMISE:
         r = await db[name].update_many(
-            {"user_id": user_id},
-            {"$set": {"user_id": tombstone, **{f: "" for f in pii_fields}}},
+            {key: user_id, **extra},
+            {"$set": {key: tombstone, **{f: "" for f in pii_fields}}},
         )
         report[name] = r.modified_count
 

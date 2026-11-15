@@ -83,7 +83,14 @@ def _dev_post(client, body: dict):
     The assertion is the point: without it a rate-limited or rejected call
     surfaced as a KeyError on ["user"], which says nothing about what went
     wrong.
+
+    `is_adult` defaults to True because creating an account now requires the
+    confirmation (core/consent.py) and these tests are about sign-in
+    mechanics, not the age gate. Pass it explicitly to override. The gate
+    itself is covered in test_erasure.py::TestAdultGate, which calls the
+    endpoint directly rather than through this helper.
     """
+    body = {"is_adult": True, **body}
     r = client.post("/api/auth/dev", json=body, headers=_as_fresh_client())
     assert r.status_code == 200, f"{r.status_code}: {r.text}"
     return r.json()

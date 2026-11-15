@@ -138,6 +138,18 @@ def subject():
             "business_id": biz_id, "owner_id": uid, "name": "Erasure Test Co",
             "category": "cafes", "city": "goa", "is_approved": True,
         })
+        # The two collections the first cascade missed, because neither keys
+        # on user_id.
+        await _insert("admin_audit", {
+            "audit_id": f"au_{uuid.uuid4().hex[:8]}", "actor_id": uid,
+            "actor_email": "erasure-subject@explore91.dev",
+            "actor_name": "Erasure Subject", "action": "business.approve",
+            "entity_type": "business", "entity_id": biz_id, "at": now,
+        })
+        await _insert("fraud_flags", {
+            "flag_id": f"fl_{uuid.uuid4().hex[:8]}", "entity_type": "user",
+            "entity_id": uid, "reason": "smoke test flag", "created_at": now,
+        })
 
     _run(_seed())
     yield {"uid": uid, "token": token, "email": email, "biz_id": biz_id}
@@ -146,10 +158,20 @@ def subject():
         for coll in ("saved", "reel_likes", "place_interest", "journey_visits",
                      "tickets", "reviews", "bookings", "user_sessions"):
             await _drop(coll, {"user_id": uid})
+        await _drop("admin_audit", {"entity_id": biz_id})
+        await _drop("fraud_flags", {"reason": "smoke test flag"})
         await _drop("businesses", {"business_id": biz_id})
         await _drop("users", {"user_id": uid})
 
     _run(_clean())
+
+
+async def _run_erase(user_id: str):
+    """Call the cascade directly, for cases with no account behind them."""
+    import sys, os
+    sys.path.insert(0, _BACKEND_DIR)
+    from core.erasure import erase_user
+    return await erase_user(user_id)
 
 
 def _erase(token):
@@ -226,6 +248,43 @@ class TestWhatSurvives:
         assert row["owner_id"] == ""
         assert row["name"] == "Erasure Test Co"
 
+    def test_the_audit_row_keeps_the_action_and_loses_the_person(self, subject):
+        """An audit trail with holes is not an audit trail, so the row stays.
+        But it carried `actor_email` - directly identifying data, not just an
+        id - and outlived erasure completely."""
+        _erase(subject["token"])
+        row = _run(_find("admin_audit", {"entity_id": subject["biz_id"]}))
+        assert row is not None, "the audit trail lost an entry"
+        assert row["action"] == "business.approve", "the action was destroyed"
+        assert row["actor_email"] == "", "an erased user's EMAIL survived"
+        assert row["actor_name"] == "", "an erased user's name survived"
+        assert row["actor_id"].startswith("deleted_")
+
+    def test_a_fraud_flag_stops_pointing_at_a_person(self, subject):
+        """Abuse records have a retention argument, so the flag stays and
+        stops naming anyone."""
+        _erase(subject["token"])
+        row = _run(_find("fraud_flags", {"reason": "smoke test flag"}))
+        assert row is not None, "the abuse record was destroyed"
+        assert row["entity_id"] != subject["uid"]
+        assert row["entity_id"].startswith("deleted_")
+
+    def test_flags_on_other_entity_types_are_untouched(self):
+        """fraud_flags is matched on entity_type too. A flag on a BUSINESS
+        whose entity_id happens to equal some user's id must not be caught."""
+        collide = f"user_{uuid.uuid4().hex[:12]}"
+        fid = f"fl_{uuid.uuid4().hex[:8]}"
+        _run(_insert("fraud_flags", {
+            "flag_id": fid, "entity_type": "business", "entity_id": collide,
+            "reason": "collision guard", "created_at": datetime.now(timezone.utc),
+        }))
+        try:
+            _run(_run_erase(collide))
+            row = _run(_find("fraud_flags", {"flag_id": fid}))
+            assert row["entity_id"] == collide,                 "erasing a user rewrote a flag about a business"
+        finally:
+            _run(_drop("fraud_flags", {"flag_id": fid}))
+
     def test_two_rows_from_one_person_share_a_tombstone(self, subject):
         """Anonymised, not scrambled: a business can still see that one
         person left this review and that booking, without knowing who."""
@@ -233,6 +292,62 @@ class TestWhatSurvives:
         rev = _run(_find("reviews", {"business_id": subject["biz_id"]}))
         bkg = _run(_find("bookings", {"business_id": subject["biz_id"]}))
         assert rev["user_id"] == bkg["user_id"]
+
+
+class TestAdultGate:
+    """is_adult used to be stored and never read: the age gate existed only
+    in the UI, and a direct POST created a working account regardless."""
+
+    def test_a_new_account_without_the_confirmation_is_refused(self):
+        email = f"test_minor_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
+        r = requests.post(
+            f"{BASE_URL}/api/auth/dev",
+            json={"email": email, "name": "Nope"},          # no is_adult
+            headers={"X-Forwarded-For": _unique_ip()}, timeout=20,
+        )
+        assert r.status_code == 403, r.text
+        assert not _run(_find("users", {"email": email})),             "a refused sign-up still created an account"
+
+    def test_explicit_false_is_refused_too(self):
+        email = f"test_minor2_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
+        r = requests.post(
+            f"{BASE_URL}/api/auth/dev",
+            json={"email": email, "name": "Nope", "is_adult": False},
+            headers={"X-Forwarded-For": _unique_ip()}, timeout=20,
+        )
+        assert r.status_code == 403, r.text
+        assert not _run(_find("users", {"email": email}))
+
+    def test_the_confirmation_lets_a_new_account_through(self):
+        email = f"test_adult_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
+        r = _signin(email, "Fine")
+        assert r.status_code == 200, r.text
+        uid = r.json()["user"]["user_id"]
+        _run(_drop("users", {"user_id": uid}))
+        _run(_drop("user_sessions", {"user_id": uid}))
+
+    def test_an_existing_account_is_not_locked_out(self):
+        """The gate is on account CREATION. Locking an existing user out of
+        their own data - including the erasure endpoint - is not a remedy for
+        not knowing their age."""
+        email = f"test_existing_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
+        uid = f"user_{uuid.uuid4().hex[:12]}"
+        _run(_insert("users", {
+            "user_id": uid, "email": email, "name": "Established",
+            "picture": None, "wallet_points": 0, "home_city": "Goa",
+            "roles": ["customer"], "created_at": datetime.now(timezone.utc),
+        }))
+        try:
+            r = requests.post(
+                f"{BASE_URL}/api/auth/dev",
+                json={"email": email, "name": "Established"},   # no is_adult
+                headers={"X-Forwarded-For": _unique_ip()}, timeout=20,
+            )
+            assert r.status_code == 200, "an existing user was locked out"
+            assert r.json()["user"]["user_id"] == uid
+        finally:
+            _run(_drop("users", {"user_id": uid}))
+            _run(_drop("user_sessions", {"user_id": uid}))
 
 
 class TestGuards:

@@ -27,7 +27,41 @@ rather than defaulting to agreed.
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from fastapi import HTTPException
+
 from core.config import CONSENT_PURPOSES, PRIVACY_NOTICE_VERSION
+
+ADULT_REQUIRED = (
+    "Explore91 is for adults. We cannot create an account without a "
+    "confirmation that you are 18 or older."
+)
+
+
+def require_adult_for_new_account(is_adult: bool) -> None:
+    """Refuse to create an account for someone who has not said they are 18+.
+
+    DPDP s9 requires verifiable parental consent before processing a child's
+    data. We cannot obtain it, so the only position we can actually hold is
+    not to process it: if the age is unknown, no account is created.
+
+    Before this, `is_adult` was stored and never read, which meant the age
+    gate existed only in the UI - `POST /auth/dev` with the field omitted
+    created a working account flagged `is_adult_confirmed: false` that
+    nothing anywhere treated differently.
+
+    **New accounts only, deliberately.** Existing accounts sign in without
+    re-asserting, for two reasons: every account predating the consent work
+    would otherwise be locked out of its own data, including the erasure
+    endpoint, and locking someone out is not a remedy for not knowing their
+    age. The cost is that a client too old to send the field can no longer
+    create accounts - which is the correct failure direction.
+
+    A self-declared checkbox is not "verifiable" in the Act's sense. It is
+    the floor. It is also the difference between a rule that is applied and
+    one that is merely recorded.
+    """
+    if not is_adult:
+        raise HTTPException(status_code=403, detail=ADULT_REQUIRED)
 
 
 def consent_fields(is_adult: bool, now: datetime) -> Dict[str, Any]:
