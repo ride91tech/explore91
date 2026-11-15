@@ -90,6 +90,16 @@ npx vercel deploy dist --prod
 writes `dist/.vercelignore` so the font assets are uploaded. Both guards exist
 because their absence shipped a broken site once already — see §6.
 
+It also writes `dist/vercel.json` (the rewrites from `frontend/vercel.json`)
+and carries `dist/.vercel` across the rebuild. A prebuilt deploy uploads
+`dist/` alone, so without the first every deep link, `robots.txt`,
+`sitemap.xml`, `/city`, `/place` and `/.well-known/assetlinks.json` answer
+404; without the second the CLI quietly creates a new project called `dist`.
+Both happened on 2026-11-15. If the build warns that no link was carried
+over, run `npx vercel link --yes --project explore91 --cwd dist` and then
+**delete `dist/.env.local`** — the link step writes a token there and it would
+be uploaded with the site.
+
 ### 4.2 Point the domain — the one step left
 
 `explore91.com` is already attached to the project; it reads "Invalid

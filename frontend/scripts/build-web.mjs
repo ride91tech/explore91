@@ -11,7 +11,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -47,6 +47,13 @@ const site = pick("EXPO_PUBLIC_SITE_URL", api);
 
 console.log(`API:  ${api}`);
 console.log(`Site: ${site}`);
+
+// The Vercel CLI keeps its project link in dist/.vercel, because the deploy
+// is `vercel deploy dist`. Wiping dist/ wiped the link, and the next deploy
+// silently created a new project named "dist" instead of updating explore91.
+// Carry the link across the rebuild.
+const linkFile = join(out, ".vercel", "project.json");
+const link = existsSync(linkFile) ? readFileSync(linkFile, "utf8") : null;
 
 rmSync(out, { recursive: true, force: true });
 
@@ -108,4 +115,33 @@ if (count(api) < wanted || count(site) < 1) {
 writeFileSync(join(out, ".vercelignore"), `!node_modules
 `);
 
-console.log(`Built to dist/ (API base present ${count(api)}x)`);
+// A prebuilt deploy uploads dist/ alone, so frontend/vercel.json never
+// reaches Vercel - and with it go the SPA fallback (every deep link a 404)
+// and the forwards to the API: /place, /city, sitemap.xml, robots.txt and
+// /.well-known (Android app links). Ship the routing in dist/. Only the
+// routing: the build keys would make Vercel try to rebuild a folder that has
+// no package.json.
+const { rewrites, redirects, headers } = JSON.parse(
+  readFileSync(join(frontend, "vercel.json"), "utf8")
+);
+if (!rewrites?.length) {
+  console.error("frontend/vercel.json has no rewrites - refusing to ship a site without routing.");
+  process.exit(1);
+}
+writeFileSync(
+  join(out, "vercel.json"),
+  JSON.stringify({ rewrites, ...(redirects && { redirects }), ...(headers && { headers }) }, null, 2) + "\n"
+);
+
+if (link) {
+  mkdirSync(join(out, ".vercel"), { recursive: true });
+  writeFileSync(linkFile, link);
+} else {
+  console.warn(
+    "No Vercel link carried over. Before deploying, run:\n" +
+    "  npx vercel link --yes --project explore91 --cwd dist\n" +
+    "then delete the dist/.env.local it writes - it holds a token and would be uploaded."
+  );
+}
+
+console.log(`Built to dist/ (API base present ${count(api)}x, ${rewrites.length} rewrites)`);
