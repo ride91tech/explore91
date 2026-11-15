@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.db import db
+from core.revenue import booking_revenue
 from core.slug import unique_slug
 from core.security import get_current_user, require_role
 from models import BusinessCreate, StaffCreate
@@ -34,12 +35,21 @@ async def owner_dashboard(current=Depends(get_current_user)):
         {"business_id": {"$in": biz_ids}}, {"_id": 0}
     ).to_list(500)
     upcoming = [b for b in bookings if b.get("status") == "confirmed"]
-    revenue = sum(50 for _ in bookings)  # demo: ₹50 platform fee per booking
+    # What the bookings are worth, by the admin reports' rule: each booking's
+    # amount_inr, cancelled ones excluded. This was a hard-coded "demo" ₹50
+    # per booking, cancellations included, under "Estimated revenue".
+    revenue = await booking_revenue({"business_id": {"$in": biz_ids}})
     return {
         "business_count": len(my_biz),
         "booking_count": len(bookings),
         "upcoming_count": len(upcoming),
-        "revenue_inr": revenue * 100,
+        # Hundredths of a rupee, despite the name: the app divides by 100, and
+        # installed builds would show a figure 100x too small if this changed.
+        "revenue_inr": revenue["gross_revenue_inr"] * 100,
+        # Rupees. "confirmed" is priced services; "estimated" comes from a
+        # place's price band for reservations without a priced item.
+        "confirmed_revenue_inr": revenue["confirmed_revenue_inr"],
+        "estimated_revenue_inr": revenue["estimated_revenue_inr"],
         # Across the owner's reviews, not a plain mean of each place's rating:
         # a place with no reviews has rating 0 (ratings come from real reviews
         # now), and averaging that in halved the score of a one-place-reviewed

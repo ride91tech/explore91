@@ -19,7 +19,10 @@ type Dashboard = {
   business_count: number;
   booking_count: number;
   upcoming_count: number;
+  /** Hundredths of a rupee (kept for installed builds); divide by 100. */
   revenue_inr: number;
+  /** Rupees. Missing from servers older than the real-revenue change. */
+  estimated_revenue_inr?: number;
   avg_rating: number;
   businesses: Business[];
   recent_bookings: any[];
@@ -80,7 +83,9 @@ export default function OwnerOverview() {
             ₹{((data?.revenue_inr ?? 0) / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
           </Text>
           <Text style={styles.revenueHint}>
-            Based on completed bookings across all your listings.
+            {data?.estimated_revenue_inr
+              ? `From bookings that aren't cancelled. ₹${data.estimated_revenue_inr.toLocaleString("en-IN")} of it is estimated from your price range, for reservations without a priced service.`
+              : "From bookings that aren't cancelled, across all your listings."}
           </Text>
         </LinearGradient>
 

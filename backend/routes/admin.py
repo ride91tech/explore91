@@ -11,6 +11,7 @@ from fastapi.responses import PlainTextResponse
 from core import audit
 from routes.catalog import content_counts, with_content
 from core.db import db
+from core.revenue import BILLABLE, TAKE_RATE, booking_revenue as _revenue
 from core.security import get_current_user, require_role
 from core.slug import ensure_business_slug, unique_slug
 from models import (
@@ -30,48 +31,11 @@ from seed.data import CATEGORIES, CITIES, CITY_COORDS, SAMPLE_IMAGES
 
 router = APIRouter()
 
-# Platform take rate applied to gross booking value.
-TAKE_RATE = 0.05
-
-# Cancelled bookings are kept for history but never counted as revenue.
-BILLABLE = {"status": {"$ne": "cancelled"}}
-
 
 def _search(term: str, fields: List[str]) -> dict:
     """Case-insensitive OR-match across `fields`, escaped against regex DoS."""
     safe = re.escape(term.strip())
     return {"$or": [{f: {"$regex": safe, "$options": "i"}} for f in fields]}
-
-
-async def _revenue(match: dict) -> dict:
-    """Sum booked value, split by whether the amount is real or estimated."""
-    pipeline = [
-        {"$match": {**match, **BILLABLE}},
-        {
-            "$group": {
-                "_id": "$amount_source",
-                "amount": {"$sum": {"$ifNull": ["$amount_inr", 0]}},
-                "count": {"$sum": 1},
-            }
-        },
-    ]
-    confirmed = estimated = 0
-    unpriced = 0
-    async for row in db.bookings.aggregate(pipeline):
-        if row["_id"] == "service":
-            confirmed += row["amount"]
-        else:
-            estimated += row["amount"]
-            if not row["amount"]:
-                unpriced += row["count"]
-    gross = confirmed + estimated
-    return {
-        "gross_revenue_inr": gross,
-        "platform_fees_inr": int(gross * TAKE_RATE),
-        "confirmed_revenue_inr": confirmed,
-        "estimated_revenue_inr": estimated,
-        "bookings_without_amount": unpriced,
-    }
 
 
 # --- Stats ---------------------------------------------------------------
