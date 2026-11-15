@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -68,17 +68,24 @@ export default function Explore() {
     if (params.category) setCategory(params.category);
   }, [params.category]);
 
+  // Every keystroke (after the debounce) starts a request, and replies can
+  // arrive out of order: a slow reply for "ca" landing after the one for
+  // "casa" used to replace the list with results for "ca". Only the newest
+  // request may update the screen.
+  const latestRequest = useRef(0);
   const load = useCallback(async () => {
+    const mine = ++latestRequest.current;
     setLoading(true);
     try {
       const qs = new URLSearchParams({ city: citySlug, limit: "50" });
       if (category) qs.append("category", category);
       if (q.trim()) qs.append("q", q.trim());
-      setResults(await api<Business[]>(`/businesses?${qs.toString()}`));
+      const found = await api<Business[]>(`/businesses?${qs.toString()}`);
+      if (mine === latestRequest.current) setResults(found);
     } catch (e) {
       console.log("search", e);
     } finally {
-      setLoading(false);
+      if (mine === latestRequest.current) setLoading(false);
     }
   }, [citySlug, category, q]);
 
