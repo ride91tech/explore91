@@ -111,9 +111,9 @@ export default function Login() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.bottom, { paddingBottom: insets.bottom + spacing.xl }]}
         >
-          <Text style={styles.h1}>Discover, book, and{"\n"}live your city.</Text>
+          <Text style={styles.h1}>Discover and live{"\n"}your city.</Text>
           <Text style={styles.sub}>
-            From candlelit dining to sunrise treks — book across restaurants, hotels, spas, events and more, all in one app.
+            From candlelit dining to sunrise treks, find the places worth going to in every city, all in one app.
           </Text>
 
           {otp.step === "entry" ? (
