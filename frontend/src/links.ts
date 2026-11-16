@@ -24,6 +24,12 @@ export function cityUrl(slug?: string | null): string | null {
   return slug ? `${PUBLIC_SITE_URL}/city/${slug}` : null;
 }
 
+/** A reel's own page: its cover and caption in the preview, and the app
+ *  opens the feed on that reel. */
+export function reelUrl(reelId?: string | null): string | null {
+  return reelId ? `${PUBLIC_SITE_URL}/reel/${encodeURIComponent(reelId)}` : null;
+}
+
 /**
  * Build the payload for a native share sheet.
  *

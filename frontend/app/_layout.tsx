@@ -12,6 +12,7 @@ import { colors } from "@/src/theme";
 import { AuthProvider, useAuth } from "@/src/auth";
 import { CityProvider } from "@/src/city";
 import { ToastHost } from "@/src/components/Toast";
+import { ShareHost } from "@/src/components/ShareHost";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -80,8 +81,10 @@ export default function RootLayout() {
         <AuthProvider>
           <CityProvider>
             <ToastHost>
-              <StatusBar style="dark" />
-              <AuthGate />
+              <ShareHost>
+                <StatusBar style="dark" />
+                <AuthGate />
+              </ShareHost>
             </ToastHost>
           </CityProvider>
         </AuthProvider>

@@ -38,6 +38,11 @@
               "scheme": "https",
               "host": "explore91.com",
               "pathPrefix": "/city"
+            },
+            {
+              "scheme": "https",
+              "host": "explore91.com",
+              "pathPrefix": "/reel"
             }
           ],
           "category": [

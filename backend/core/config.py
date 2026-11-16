@@ -107,4 +107,4 @@ IOS_APP_ID = os.environ.get("IOS_APP_ID", "").strip()
 
 # Paths the app claims. Anything outside this list stays in the browser —
 # /admin and /owner deliberately so.
-DEEP_LINK_PATHS = ["/place/*", "/city/*"]
+DEEP_LINK_PATHS = ["/place/*", "/city/*", "/reel/*"]

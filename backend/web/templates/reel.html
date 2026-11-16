@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+  <p class="kicker">{{ city_name }} &middot; Reel</p>
+  <h1>{{ reel.caption }}</h1>
+  <p class="meta">
+    {{ author }}
+    {%- if place %} &middot; {{ place.name }}{% endif %}
+  </p>
+
+  {% if reel.cover_image %}
+    <img class="hero" src="{{ reel.cover_image }}" alt="{{ reel.caption }}" loading="lazy">
+  {% endif %}
+
+  <p>Open this link on your phone with Explore91 installed to watch the reel.</p>
+
+  {% if place and place.slug %}
+    <h2>Where this is</h2>
+    <a class="card" href="/place/{{ place.slug }}">
+      <div class="name">{{ place.name }}</div>
+      <div class="sub">{{ place.area or place.address or city_name }}</div>
+    </a>
+  {% endif %}
+
+  <h2>More in {{ city_name }}</h2>
+  <p><a href="/city/{{ reel.city }}">Browse {{ city_name }} on Explore91</a></p>
+{% endblock %}
