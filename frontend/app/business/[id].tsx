@@ -178,11 +178,21 @@ export default function BusinessDetail() {
     );
   }
 
+  // A delisted or pending place (is_approved false) is gone for everyone
+  // but its owner and admins, who still need to preview a pending listing.
+  // It used to open like any other place, with Book and Save, from an old
+  // link or someone's Saved list. Ownership needs a real match: comparing
+  // the ids alone let a signed-out visitor through on a place with no
+  // owner_id (undefined === undefined).
+  const isOwner = !!user && !!biz?.owner_id && biz.owner_id === user.user_id;
+  const hiddenFromViewer =
+    !!biz && biz.is_approved === false && !isOwner && !user?.roles?.includes("admin");
+
   // Without this the screen spun forever on a place that no longer exists.
   // That matters now place links are public and shareable: a link to a
   // delisted place used to hand the visitor a spinner that never resolved.
-  if (!biz) {
-    const missing = loadFailure !== "error";
+  if (!biz || hiddenFromViewer) {
+    const missing = hiddenFromViewer || loadFailure !== "error";
     return (
       <View style={[styles.loader, { padding: spacing.xl, gap: spacing.md }]}>
         <Ionicons

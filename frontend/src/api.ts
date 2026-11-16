@@ -96,6 +96,10 @@ export type Business = {
   area?: string | null;
   /** One evocative reason to go; falls back to `description`. */
   why_go?: string | null;
+  /** False when delisted or still pending approval. Absent means listed. */
+  is_approved?: boolean;
+  /** Set on places an owner created or claimed. */
+  owner_id?: string | null;
   lat: number;
   lng: number;
   cover_image: string;
