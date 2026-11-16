@@ -44,7 +44,16 @@ export default function ReelsFeed() {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [screenFocused, setScreenFocused] = useState(false);
   const [topics, setTopics] = useState<{ slug: string; name: string; count: number }[]>([]);
-  const [topic, setTopic] = useState<string | null>(null);   // null = For you
+  // The topic belongs to the city it was picked in. It used to survive a
+  // city change: pick Spas in Goa, switch to Ahmedabad (no spa reels) and
+  // the feed said "No reels yet in Ahmedabad" over nine reels, with the
+  // topic rail hidden so there was no way back to "For you".
+  const [picked, setPicked] = useState<{ city: string; slug: string | null }>({ city: "", slug: null });
+  const topic = picked.city === city.slug ? picked.slug : null;   // null = For you
+  const setTopic = useCallback(
+    (slug: string | null) => { setPicked({ city: city.slug, slug }); setActiveIndex(0); },
+    [city.slug]
+  );
   // business_id -> interested/going/visited, so the rail reflects what you
   // already flagged when a reel scrolls back into view.
   const [interest, setInterest] = useState<Record<string, InterestStatus>>({});
@@ -219,7 +228,11 @@ export default function ReelsFeed() {
 
   return (
     <View style={styles.container}>
+      {/* Keyed by feed, so a new topic or city starts at its first reel.
+          The list used to keep its scroll offset: five reels into "For
+          you", picking Restaurants opened on its third reel. */}
       <FlatList
+        key={`${cityLower}:${topic ?? ""}`}
         data={reels}
         keyExtractor={(r) => r.reel_id}
         pagingEnabled
