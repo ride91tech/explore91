@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -52,7 +52,9 @@ export default function Discover() {
         api<CategoryT[]>("/categories"),
         api<Business[]>(`/businesses/trending?city=${citySlug}&limit=8`),
         api<Business[]>(`/businesses?city=${citySlug}&featured=true&limit=6`),
-        api<Business[]>(`/businesses?city=${citySlug}&limit=10`),
+        // Enough to still fill five rows after leaving out what Featured
+        // and Trending already show.
+        api<Business[]>(`/businesses?city=${citySlug}&limit=20`),
       ]);
       setCities(c);
       setCategories(cats);
@@ -68,6 +70,22 @@ export default function Discover() {
   }, [citySlug]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Trending only lists places with recent activity, and a featured place
+  // already has its row above, so it isn't shown twice.
+  const hot = useMemo(() => {
+    const featuredIds = new Set(featured.map((b) => b.business_id));
+    return trending.filter((b) => !featuredIds.has(b.business_id)).slice(0, 5);
+  }, [featured, trending]);
+
+  // This section was items 6-10 of an unsorted list headed "More around
+  // you": not sorted by where you are, it repeated places from Trending (2
+  // of 5 in both Goa and Pune), and a city with five or fewer places showed
+  // the heading over nothing. Now: places not already on screen above.
+  const more = useMemo(() => {
+    const shown = new Set([...featured, ...hot].map((b) => b.business_id));
+    return nearby.filter((b) => !shown.has(b.business_id)).slice(0, 5);
+  }, [featured, hot, nearby]);
 
   return (
     <View style={styles.container}>
@@ -234,11 +252,11 @@ export default function Discover() {
         )}
 
         {/* Trending list */}
-        {trending.length > 0 && (
+        {hot.length > 0 && (
           <View style={{ marginTop: spacing.xl, paddingHorizontal: spacing.lg }}>
             <SectionHeader title="Trending in the city" noPadding />
             <View style={{ gap: spacing.md, marginTop: spacing.md }}>
-              {trending.slice(0, 5).map((b) => (
+              {hot.map((b) => (
                 <BusinessCard
                   key={b.business_id}
                   biz={b}
@@ -251,12 +269,12 @@ export default function Discover() {
           </View>
         )}
 
-        {/* Nearby / More */}
-        {nearby.length > 0 && (
+        {/* More in the city: places not already on screen above. */}
+        {more.length > 0 && (
           <View style={{ marginTop: spacing.xl, paddingHorizontal: spacing.lg }}>
-            <SectionHeader title="More around you" noPadding />
+            <SectionHeader title={`More in ${cityName}`} noPadding />
             <View style={{ gap: spacing.md, marginTop: spacing.md }}>
-              {nearby.slice(5, 10).map((b) => (
+              {more.map((b) => (
                 <BusinessCard
                   key={b.business_id}
                   biz={b}
