@@ -11,7 +11,6 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
-  Share,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -22,7 +21,8 @@ import * as Haptics from "expo-haptics";
 import { api, Business, InterestStatus } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { useAuth } from "@/src/auth";
-import { placeUrl, shareContent } from "@/src/links";
+import { placeUrl } from "@/src/links";
+import { useShare } from "@/src/components/ShareHost";
 import { colors, fonts, radius, spacing, type as tType } from "@/src/theme";
 import { ratingText } from "@/src/rating";
 
@@ -40,6 +40,7 @@ export default function BusinessDetail() {
   const router = useRouter();
   const goBack = useGoBack();
   const { show } = useToast();
+  const shareLink = useShare();
   const { user } = useAuth();
   const [biz, setBiz] = useState<Business | null>(null);
   const [saved, setSaved] = useState(false);
@@ -93,17 +94,8 @@ export default function BusinessDetail() {
 
   const share = async () => {
     if (!biz) return;
-    try {
-      const where = biz.area || biz.address || "";
-      await Share.share(
-        shareContent(
-          where ? `${biz.name} — ${where}` : biz.name,
-          placeUrl(biz.slug)
-        )
-      );
-    } catch {
-      show("Couldn't open sharing. Try again.", "error");
-    }
+    const where = biz.area || biz.address || "";
+    await shareLink(where ? `${biz.name} — ${where}` : biz.name, placeUrl(biz.slug));
   };
 
   /** Interested / Going / Visited. Tapping the active state clears it, and

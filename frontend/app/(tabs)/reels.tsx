@@ -8,7 +8,6 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
-  Share,
   Linking,
   ScrollView,
 } from "react-native";
@@ -16,12 +15,13 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { api, InterestPlace, InterestStatus, ReelT } from "@/src/api";
 import { reelCta, mapsUrl } from "@/src/reelCta";
-import { placeUrl, shareContent } from "@/src/links";
+import { reelUrl } from "@/src/links";
+import { useShare } from "@/src/components/ShareHost";
 import { useAuth } from "@/src/auth";
 import { useCity } from "@/src/city";
 import { useToast } from "@/src/components/Toast";
@@ -35,10 +35,18 @@ export default function ReelsFeed() {
   const { user } = useAuth();
   const city = useCity();
   const { show } = useToast();
+  const shareLink = useShare();
   const { height, width } = Dimensions.get("window");
   const itemH = height - TAB_BAR;
+  // Set by /reel/<id> (a shared link): that reel goes first in the feed.
+  const { reel: linkedReelId } = useLocalSearchParams<{ reel?: string }>();
 
   const [reels, setReels] = useState<ReelT[]>([]);
+  // The shared reel, held apart from the feed so a reload keeps it on top.
+  // It belongs to the feed it was opened into: picking a topic or another
+  // city drops it, like any other scroll position.
+  const pinned = useRef<{ reel: ReelT; city: string } | null>(null);
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
@@ -51,7 +59,12 @@ export default function ReelsFeed() {
   const [picked, setPicked] = useState<{ city: string; slug: string | null }>({ city: "", slug: null });
   const topic = picked.city === city.slug ? picked.slug : null;   // null = For you
   const setTopic = useCallback(
-    (slug: string | null) => { setPicked({ city: city.slug, slug }); setActiveIndex(0); },
+    (slug: string | null) => {
+      pinned.current = null;
+      setPinnedId(null);
+      setPicked({ city: city.slug, slug });
+      setActiveIndex(0);
+    },
     [city.slug]
   );
   // business_id -> interested/going/visited, so the rail reflects what you
@@ -75,7 +88,9 @@ export default function ReelsFeed() {
           ? api<InterestPlace[]>("/places/interest", { auth: true }).catch(() => [])
           : Promise.resolve([] as InterestPlace[]),
       ]);
-      setReels(list);
+      if (pinned.current && pinned.current.city !== cityLower) pinned.current = null;
+      const pin = pinned.current?.reel ?? null;
+      setReels(pin ? [pin, ...list.filter((r) => r.reel_id !== pin.reel_id)] : list);
       setLikedIds(new Set(likes));
       setTopics(rails);
       setInterest(
@@ -86,6 +101,29 @@ export default function ReelsFeed() {
   }, [cityLower, user, topic]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!linkedReelId) return;
+    let cancelled = false;
+    api<ReelT>(`/reels/${encodeURIComponent(linkedReelId)}`)
+      .then((r) => {
+        if (cancelled) return;
+        pinned.current = { reel: r, city: cityLower };
+        setPinnedId(r.reel_id);
+        setReels((prev) => [r, ...prev.filter((x) => x.reel_id !== r.reel_id)]);
+        setActiveIndex(0);
+      })
+      .catch((e: any) => {
+        if (cancelled) return;
+        show(
+          e?.status === 404 ? "That reel isn't on Explore91 anymore." : "Couldn't open that reel.",
+          "error"
+        );
+      });
+    return () => { cancelled = true; };
+    // cityLower is read, not watched: the pin is for the feed it opened in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedReelId, show]);
 
   /** Interested / Going / Visited, straight onto the place. Tapping the
    *  active one again clears it, so the rail is a toggle, not a ratchet. */
@@ -163,16 +201,12 @@ export default function ReelsFeed() {
 
   const shareReel = useCallback(async (reel: ReelT) => {
     const where = reel.business_name ? ` at ${reel.business_name}` : "";
-    try {
-      // Reels have no page of their own yet, so share the place the reel is
-      // of — that is the thing with a public URL and a preview card.
-      await Share.share(
-        shareContent(`${reel.caption}${where}`, placeUrl(reel.business_slug))
-      );
-    } catch {
-      show("Couldn't open sharing. Try again.", "error");
-    }
-  }, [show]);
+    // The reel's own page, so the preview shows this clip rather than the
+    // place, and a reel with no place still has a link.
+    // Captions usually end in a full stop; "skyline. at Old Goa" reads badly.
+    const caption = where ? reel.caption.replace(/[\s.!…]+$/u, "") : reel.caption;
+    await shareLink(`${caption}${where}`, reelUrl(reel.reel_id));
+  }, [shareLink]);
 
   const toggleLike = useCallback(async (reelId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -232,7 +266,7 @@ export default function ReelsFeed() {
           The list used to keep its scroll offset: five reels into "For
           you", picking Restaurants opened on its third reel. */}
       <FlatList
-        key={`${cityLower}:${topic ?? ""}`}
+        key={`${cityLower}:${topic ?? ""}:${pinnedId ?? ""}`}
         data={reels}
         keyExtractor={(r) => r.reel_id}
         pagingEnabled

@@ -136,6 +136,60 @@ async def place_page(slug: str, request: Request):
     )
 
 
+@router.get("/reel/{reel_id}", response_class=HTMLResponse)
+async def reel_page(reel_id: str, request: Request):
+    """A shared reel's landing page.
+
+    Reels used to be shared as their place's link, so the preview card showed
+    the place rather than the clip someone actually sent — and a reel with no
+    place went out as bare text with no link at all. This gives every reel a
+    URL with its own cover and caption, and the app claims the path, so the
+    link opens the feed on that reel where the app is installed.
+    """
+    reel = await db.reels.find_one(
+        {"reel_id": reel_id, "is_hidden": {"$ne": True}}, {"_id": 0}
+    )
+    # Same visibility rule as the feed and /api/reels/{id}: a reel of an
+    # unlisted place is not public.
+    place = None
+    if reel and reel.get("business_id"):
+        place = await db.businesses.find_one(
+            {"business_id": reel["business_id"], "is_approved": {"$ne": False}},
+            {"_id": 0, "name": 1, "slug": 1, "area": 1, "address": 1},
+        )
+        if not place:
+            reel = None
+    if not reel:
+        return _not_found(request, "That reel isn't on Explore91 anymore.")
+
+    city = await _city_by_slug(reel.get("city", ""))
+    city_name = city["name"] if city else (reel.get("city") or "").title()
+    author = "@" + "".join((reel.get("author") or "explore91").split()).lower()
+    where = place["name"] if place else city_name
+    caption = _truncate(reel.get("caption") or "", 120)
+
+    return templates.TemplateResponse(
+        request,
+        "reel.html",
+        {
+            "page_title": f"{caption or 'A reel'} · {author} · Explore91",
+            "og_title": f"{caption} — {where}" if caption else f"A reel from {where}",
+            "description": f"Watch {author}'s reel from {where} on Explore91.",
+            "canonical": f"{_base_url(request)}/reel/{reel_id}",
+            "image": reel.get("cover_image"),
+            "og_type": "video.other",
+            # A reel page is a caption and a still: thin content. It exists to
+            # be shared, not ranked, so it stays out of the index and the
+            # sitemap, and its place page carries the search weight.
+            "noindex": True,
+            "reel": reel,
+            "author": author,
+            "place": place,
+            "city_name": city_name,
+        },
+    )
+
+
 @router.get("/city/{slug}", response_class=HTMLResponse)
 async def city_page(slug: str, request: Request):
     city = await _city_by_slug(slug)

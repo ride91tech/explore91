@@ -6,6 +6,7 @@ in the response body, not about what the page would look like after hydration.
 """
 import os
 import re
+from html import unescape
 
 import pytest
 import requests
@@ -224,7 +225,8 @@ class TestDeepLinkAssociation:
 
 class TestReelSlugDenormalisation:
     def test_reels_carry_their_places_slug(self):
-        """A shared reel links to its place; reels have no page of their own."""
+        """A reel's own page links on to its place, and the app opens the place
+        from the reel, so the slug still has to be there."""
         r = requests.get(
             f"{BASE_URL}/api/reels", params={"city": "goa", "limit": 20}, timeout=30
         )
@@ -295,3 +297,59 @@ class TestReelSlugDenormalisation:
             if page.status_code != 200:
                 broken.append((reel["business_slug"], page.status_code))
         assert not broken, f"reels in the feed link to dead pages: {broken}"
+
+
+@pytest.fixture(scope="module")
+def a_reel():
+    r = requests.get(
+        f"{BASE_URL}/api/reels", params={"city": "goa", "limit": 20}, timeout=30
+    )
+    assert r.status_code == 200, r.text
+    reels = r.json()
+    if not reels:
+        pytest.skip("no reels seeded")
+    return reels[0]
+
+
+class TestReelPage:
+    """explore91.com/reel/<id>: what a shared reel's preview card is read from."""
+
+    def test_renders_without_javascript(self, a_reel):
+        r = requests.get(f"{BASE_URL}/reel/{a_reel['reel_id']}", timeout=20)
+        assert r.status_code == 200
+        assert "text/html" in r.headers["content-type"]
+        caption = " ".join(a_reel["caption"].split())[:40]
+        assert caption in unescape(_strip_tags(r.text)), "the caption must be in the HTML body"
+
+    def test_link_preview_uses_the_reel_not_the_place(self, a_reel):
+        html = requests.get(f"{BASE_URL}/reel/{a_reel['reel_id']}", timeout=20).text
+        assert _meta(html, "og:site_name") == "Explore91"
+        assert _meta(html, "og:title")
+        image = _meta(html, "og:image")
+        assert image and image.startswith("http"), f"og:image not absolute: {image}"
+        # Attribute values are HTML-escaped (& becomes &amp;), as they must be.
+        assert unescape(image) == a_reel["cover_image"], "the card should show the reel's cover"
+        assert f"/reel/{a_reel['reel_id']}" in _meta(html, "og:url")
+
+    def test_is_kept_out_of_the_index(self, a_reel):
+        """A caption and a still is thin content; the place page ranks instead."""
+        html = requests.get(f"{BASE_URL}/reel/{a_reel['reel_id']}", timeout=20).text
+        assert 'content="noindex' in html
+        sitemap = requests.get(f"{BASE_URL}/sitemap.xml", timeout=30).text
+        assert "/reel/" not in sitemap
+
+    def test_links_on_to_its_place(self, a_reel):
+        if not a_reel.get("business_slug"):
+            pytest.skip("first reel is a city reel")
+        html = requests.get(f"{BASE_URL}/reel/{a_reel['reel_id']}", timeout=20).text
+        assert f'href="/place/{a_reel["business_slug"]}"' in html
+
+    def test_unknown_reel_is_404_not_200(self):
+        r = requests.get(f"{BASE_URL}/reel/definitely-not-a-reel", timeout=20)
+        assert r.status_code == 404
+        assert 'name="robots"' in r.text
+
+    def test_app_claims_the_path(self):
+        """Without /reel/* in the association, the link opens a browser tab."""
+        from core.config import DEEP_LINK_PATHS
+        assert "/reel/*" in DEEP_LINK_PATHS
