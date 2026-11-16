@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -27,12 +27,22 @@ import { colors, fonts, radius, shadow, spacing, text as tText, type as tType } 
  * one that says so.
  */
 
-type Section = "saved" | "bucket";
+type Section = "saved" | "bucket" | "visited";
 
+// The bucket list used to ask for "interested" places only, so a place
+// marked Going or Visited was listed nowhere in the app: moving a
+// bucket-list place on to Going made it vanish.
 const SEGMENTS: { key: Section; label: string; blurb: string }[] = [
-  { key: "saved", label: "Saved places", blurb: "Bookmarks across every city" },
-  { key: "bucket", label: "Bucket list", blurb: "Places you dream of visiting" },
+  { key: "saved", label: "Saved", blurb: "Bookmarks across every city" },
+  { key: "bucket", label: "Bucket list", blurb: "Places you're interested in or going to" },
+  { key: "visited", label: "Visited", blurb: "Places you've been" },
 ];
+
+const EMPTY: Record<Section, { icon: "bookmark-outline" | "sparkles-outline" | "flag-outline"; title: string; sub: string }> = {
+  saved: { icon: "bookmark-outline", title: "Nothing saved yet", sub: "Bookmark a place and it shows up here." },
+  bucket: { icon: "sparkles-outline", title: "Your bucket list is empty", sub: "Mark a place Interested or Going and it lands here." },
+  visited: { icon: "flag-outline", title: "No visited places yet", sub: "Mark a place Visited and it's remembered here." },
+};
 
 export default function Trips() {
   const insets = useSafeAreaInsets();
@@ -40,7 +50,7 @@ export default function Trips() {
   const city = useCity();
   const [section, setSection] = useState<Section>("saved");
   const [saved, setSaved] = useState<Business[]>([]);
-  const [bucket, setBucket] = useState<InterestPlace[]>([]);
+  const [flagged, setFlagged] = useState<InterestPlace[]>([]);
   const [journey, setJourney] = useState<JourneyT | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,11 +60,11 @@ export default function Trips() {
     // independently rather than racing in a single Promise.all.
     const [s, b, j] = await Promise.allSettled([
       api<Business[]>("/saved", { auth: true }),
-      api<InterestPlace[]>("/places/interest?status=interested", { auth: true }),
+      api<InterestPlace[]>("/places/interest?limit=100", { auth: true }),
       api<JourneyT>("/journey", { auth: true }),
     ]);
     if (s.status === "fulfilled") setSaved(s.value);
-    if (b.status === "fulfilled") setBucket(b.value);
+    if (b.status === "fulfilled") setFlagged(b.value);
     if (j.status === "fulfilled") setJourney(j.value);
     setLoading(false);
     setRefreshing(false);
@@ -62,7 +72,10 @@ export default function Trips() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const items: Business[] = section === "saved" ? saved : bucket;
+  const bucket = useMemo(() => flagged.filter((p) => p.interest_status !== "visited"), [flagged]);
+  const visited = useMemo(() => flagged.filter((p) => p.interest_status === "visited"), [flagged]);
+  const lists: Record<Section, (Business | InterestPlace)[]> = { saved, bucket, visited };
+  const items = lists[section];
 
   const header = (
     <View>
@@ -85,7 +98,7 @@ export default function Trips() {
       <View style={styles.segmentRow}>
         {SEGMENTS.map((s) => {
           const active = s.key === section;
-          const count = s.key === "saved" ? saved.length : bucket.length;
+          const count = lists[s.key].length;
           return (
             <Pressable
               key={s.key}
@@ -154,28 +167,28 @@ export default function Trips() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons
-              name={section === "saved" ? "bookmark-outline" : "sparkles-outline"}
-              size={26}
-              color={colors.onSurfaceTertiary}
-            />
-            <Text style={styles.emptyTitle}>
-              {section === "saved" ? "Nothing saved yet" : "Your bucket list is empty"}
-            </Text>
-            <Text style={styles.emptySub}>
-              {section === "saved"
-                ? "Bookmark a place and it shows up here."
-                : "Mark a place Interested and it lands here."}
-            </Text>
+            <Ionicons name={EMPTY[section].icon} size={26} color={colors.onSurfaceTertiary} />
+            <Text style={styles.emptyTitle}>{EMPTY[section].title}</Text>
+            <Text style={styles.emptySub}>{EMPTY[section].sub}</Text>
           </View>
         }
         renderItem={({ item }) => (
-          <BusinessCard
-            biz={item}
-            variant="row"
-            testID={`trip-${item.business_id}`}
-            onPress={() => router.push(`/business/${item.business_id}`)}
-          />
+          <View>
+            <BusinessCard
+              biz={item}
+              variant="row"
+              testID={`trip-${item.business_id}`}
+              onPress={() => router.push(`/business/${item.business_id}`)}
+            />
+            {/* The bucket list mixes two flags, so each row says which. */}
+            {section === "bucket" && "interest_status" in item ? (
+              <View style={styles.flagPill} pointerEvents="none">
+                <Text style={styles.flagPillText}>
+                  {item.interest_status === "going" ? "Going" : "Interested"}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         )}
       />
     </View>
@@ -209,6 +222,16 @@ function SoonTile({
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  flagPill: {
+    position: "absolute",
+    top: spacing.sm,
+    right: spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: colors.brandPrimary,
+  },
+  flagPillText: { fontFamily: fonts.bodySemi, fontSize: 11, color: colors.onBrandPrimary },
 
   titleBlock: { marginBottom: spacing.lg },
   kicker: tText.eyebrow,
