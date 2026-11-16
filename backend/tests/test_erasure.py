@@ -14,6 +14,8 @@ The classification being tested is the judgement in core/erasure.py:
 A test that only checked "the user row is gone" would pass against an
 implementation that left every review, booking and session behind.
 """
+import functools
+import importlib.util
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -21,11 +23,13 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import requests
 from dotenv import load_dotenv
+from fastapi.testclient import TestClient
 from motor.motor_asyncio import AsyncIOMotorClient
 from booking_dates import future_date
 
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _REPO_DIR = os.path.dirname(_BACKEND_DIR)
+_SERVER_PY = os.path.join(_BACKEND_DIR, "server.py")
 load_dotenv(os.path.join(_REPO_DIR, "frontend", ".env"))
 load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
@@ -53,13 +57,39 @@ def _unique_ip() -> str:
 # address before looking it up, so a mixed-case seed is never matched and the
 # handler quietly creates a SECOND account - which made a backfill test fail
 # while inspecting the untouched original.
+@functools.lru_cache(maxsize=1)
+def _app():
+    """The app in-process. Loaded once; the gate is read per request."""
+    spec = importlib.util.spec_from_file_location("explore91_server_erasure", _SERVER_PY)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _dev_post(body: dict):
+    """POST /auth/dev to the app in-process, with the dev gate open.
+
+    These calls used to go to the live server, which answers 404 unless
+    DEV_AUTH_ENABLED is set on it. CI leaves it unset on purpose - see
+    test_dev_signin.py - so every test here that signs in failed in CI and
+    passed on a developer's machine. A suite must not need an authentication
+    bypass switched on in the server under test, so the sign-in runs here,
+    with the gate opened for this one call only.
+
+    The in-process app and the live server share a database, so the accounts
+    and sessions this creates are the ones the rest of the file goes on to
+    inspect and erase through the live API.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("DEV_AUTH_ENABLED", "true")
+        with TestClient(_app().app) as client:
+            return client.post(
+                "/api/auth/dev", json=body, headers={"X-Forwarded-For": _unique_ip()}
+            )
+
+
 def _signin(email: str, name: str):
-    return requests.post(
-        f"{BASE_URL}/api/auth/dev",
-        json={"email": email, "name": name, "is_adult": True},
-        headers={"X-Forwarded-For": _unique_ip()},
-        timeout=20,
-    )
+    return _dev_post({"email": email, "name": name, "is_adult": True})
 
 
 def _mongo():
@@ -301,20 +331,16 @@ class TestAdultGate:
 
     def test_a_new_account_without_the_confirmation_is_refused(self):
         email = f"test_minor_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
-        r = requests.post(
-            f"{BASE_URL}/api/auth/dev",
-            json={"email": email, "name": "Nope"},          # no is_adult
-            headers={"X-Forwarded-For": _unique_ip()}, timeout=20,
+        r = _dev_post(
+            {"email": email, "name": "Nope"},          # no is_adult
         )
         assert r.status_code == 403, r.text
         assert not _run(_find("users", {"email": email})),             "a refused sign-up still created an account"
 
     def test_explicit_false_is_refused_too(self):
         email = f"test_minor2_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
-        r = requests.post(
-            f"{BASE_URL}/api/auth/dev",
-            json={"email": email, "name": "Nope", "is_adult": False},
-            headers={"X-Forwarded-For": _unique_ip()}, timeout=20,
+        r = _dev_post(
+            {"email": email, "name": "Nope", "is_adult": False},
         )
         assert r.status_code == 403, r.text
         assert not _run(_find("users", {"email": email}))
@@ -339,10 +365,8 @@ class TestAdultGate:
             "roles": ["customer"], "created_at": datetime.now(timezone.utc),
         }))
         try:
-            r = requests.post(
-                f"{BASE_URL}/api/auth/dev",
-                json={"email": email, "name": "Established"},   # no is_adult
-                headers={"X-Forwarded-For": _unique_ip()}, timeout=20,
+            r = _dev_post(
+                {"email": email, "name": "Established"},   # no is_adult
             )
             assert r.status_code == 200, "an existing user was locked out"
             assert r.json()["user"]["user_id"] == uid
@@ -410,11 +434,8 @@ class TestConsentRecord:
         email = f"test_nosignal_{WORKER}_{uuid.uuid4().hex[:8]}@explore91.dev"
         uid = self._legacy_user(email)
         try:
-            r = requests.post(
-                f"{BASE_URL}/api/auth/dev",
-                json={"email": email, "name": "Legacy"},   # no is_adult
-                headers={"X-Forwarded-For": _unique_ip()},
-                timeout=20,
+            r = _dev_post(
+                {"email": email, "name": "Legacy"},   # no is_adult
             )
             assert r.status_code == 200, r.text
             row = _run(_find("users", {"user_id": uid}))
