@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
+import { useGoBack } from "@/src/routing";
 import {
   View,
   Text,
@@ -8,7 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCity } from "@/src/city";
 import { api, CityT, JourneyT } from "@/src/api";
@@ -30,13 +31,16 @@ import { colors, fonts, radius, shadow, spacing, text as tText, type as tType } 
 export default function Journey() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useGoBack();
   const city = useCity();
   const [journey, setJourney] = useState<JourneyT | null>(null);
   const [cityTotal, setCityTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
 
   const load = useCallback(async () => {
+    setError(null);
     try {
       const [j, cities] = await Promise.all([
         api<JourneyT>("/journey", { auth: true }),
@@ -45,6 +49,7 @@ export default function Journey() {
       setJourney(j);
       setCityTotal(cities.length);
     } catch (e: any) {
+      setNeedsSignIn(e?.status === 401);
       setError(
         e?.status === 401
           ? "Sign in to keep a record of where you've been."
@@ -55,14 +60,16 @@ export default function Journey() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // On focus, not once: coming back from signing in used to leave the
+  // "Sign in" message on screen.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const visited = journey?.visited ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable onPress={() => router.back()} testID="close-journey" style={styles.close}>
+        <Pressable onPress={goBack} testID="close-journey" style={styles.close}>
           <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>Your Journey</Text>
@@ -77,9 +84,14 @@ export default function Journey() {
         <View style={styles.center}>
           <Ionicons name="map-outline" size={28} color={colors.onSurfaceTertiary} />
           <Text style={styles.emptyTitle}>{error}</Text>
-          {/* 401 is the common case here, so offer the way forward. */}
-          <Pressable onPress={() => router.push("/login")} style={styles.cta}>
-            <Text style={styles.ctaText}>Sign in</Text>
+          {/* Sign in only when that is the problem. A network failure used
+              to offer "Sign in" to someone already signed in. */}
+          <Pressable
+            testID="journey-error-cta"
+            onPress={() => (needsSignIn ? router.push("/login") : (setLoading(true), load()))}
+            style={styles.cta}
+          >
+            <Text style={styles.ctaText}>{needsSignIn ? "Sign in" : "Try again"}</Text>
           </Pressable>
         </View>
       ) : (

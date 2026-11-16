@@ -13,8 +13,25 @@
  * this returns. Route *names* are still checked wherever they are typed as
  * `Href`; this only loosens positional indexing.
  */
-import { useSegments } from "expo-router";
+import { useCallback } from "react";
+import { useRouter, useSegments } from "expo-router";
 
 export function useRouteSegments(): string[] {
   return useSegments() as unknown as string[];
+}
+
+/**
+ * A back button that always goes somewhere.
+ *
+ * `router.back()` silently does nothing when there is no screen to go back
+ * to, which is the normal case for a shared link: explore91.com/place/<slug>
+ * opens the app straight onto the place, and its back arrow was dead. With
+ * no history, go Home instead.
+ */
+export function useGoBack(): () => void {
+  const router = useRouter();
+  return useCallback(
+    () => (router.canGoBack() ? router.back() : router.replace("/(tabs)")),
+    [router]
+  );
 }

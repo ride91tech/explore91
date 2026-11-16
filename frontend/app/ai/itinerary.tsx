@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useGoBack } from "@/src/routing";
 import {
   View,
   Text,
@@ -26,6 +27,7 @@ const INTERESTS = ["Food", "Nightlife", "Culture", "Wellness", "Adventure", "Sho
 export default function ItineraryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useGoBack();
   const city = useCity();
   const [days, setDays] = useState(2);
   const [interests, setInterests] = useState<string[]>([]);
@@ -56,7 +58,7 @@ export default function ItineraryScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable testID="itin-close" onPress={() => router.back()} style={styles.close}>
+        <Pressable testID="itin-close" onPress={goBack} style={styles.close}>
           <Ionicons name="close" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>Smart itinerary</Text>

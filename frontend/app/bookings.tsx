@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from "react";
+import { useGoBack } from "@/src/routing";
 import {
   View,
   Text,
@@ -28,6 +29,7 @@ const inr = (n?: number) => (n ? `₹${n.toLocaleString("en-IN")}` : null);
 export default function Bookings() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useGoBack();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export default function Bookings() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable testID="back-bookings" onPress={() => router.back()} style={styles.close}>
+        <Pressable testID="back-bookings" onPress={goBack} style={styles.close}>
           <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>All bookings</Text>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useGoBack } from "@/src/routing";
 import {
   View,
   Text,
@@ -37,6 +38,7 @@ export default function BusinessDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useGoBack();
   const { show } = useToast();
   const { user } = useAuth();
   const [biz, setBiz] = useState<Business | null>(null);
@@ -259,7 +261,7 @@ export default function BusinessDetail() {
           />
           {/* Header buttons */}
           <View style={[styles.topBar, { top: insets.top + spacing.sm }]}>
-            <Pressable testID="back-btn" style={styles.iconBtn} onPress={() => router.back()}>
+            <Pressable testID="back-btn" style={styles.iconBtn} onPress={goBack}>
               <Ionicons name="chevron-back" size={20} color="#FFF" />
             </Pressable>
             <View style={{ flexDirection: "row", gap: 8 }}>

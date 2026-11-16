@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useGoBack } from "@/src/routing";
 import {
   View,
   Text,
@@ -34,6 +35,7 @@ export default function BookScreen() {
   const { id, service } = useLocalSearchParams<{ id: string; service?: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useGoBack();
   const { show } = useToast();
   const [biz, setBiz] = useState<Business | null>(null);
   const [step, setStep] = useState<0 | 1>(0);
@@ -193,7 +195,7 @@ export default function BookScreen() {
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable onPress={() => router.back()} testID="close-book" style={styles.close}>
+        <Pressable onPress={goBack} testID="close-book" style={styles.close}>
           <Ionicons name="close" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>{step === 0 ? "Select date & time" : "Guest details"}</Text>

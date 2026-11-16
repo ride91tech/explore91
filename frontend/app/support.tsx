@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useGoBack } from "@/src/routing";
 import {
   View,
   Text,
@@ -11,7 +12,6 @@ import {
   Platform,
 } from "react-native";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { useAction } from "@/src/components/Toast";
@@ -34,7 +34,7 @@ const STATUS_COPY: Record<Ticket["status"], { label: string; tone: string }> = {
 
 export default function Support() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const goBack = useGoBack();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [subject, setSubject] = useState("");
@@ -77,7 +77,7 @@ export default function Support() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable testID="close-support" onPress={() => router.back()} style={styles.close}>
+        <Pressable testID="close-support" onPress={goBack} style={styles.close}>
           <Ionicons name="close" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>Help &amp; Support</Text>
