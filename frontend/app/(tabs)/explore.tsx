@@ -292,10 +292,15 @@ export default function Explore() {
                       locations={[0, 0.45, 1]}
                       style={StyleSheet.absoluteFill}
                     />
-                    <View style={styles.pickBadge}>
-                      <Ionicons name="sparkles" size={10} color={colors.onBrandTertiary} />
-                      <Text style={styles.pickBadgeText}>Editor&apos;s pick</Text>
-                    </View>
+                    {/* Only a featured place is an editor's pick. Most
+                        categories have none, and the first result wore the
+                        badge anyway. */}
+                    {editorsPick.is_featured ? (
+                      <View style={styles.pickBadge}>
+                        <Ionicons name="sparkles" size={10} color={colors.onBrandTertiary} />
+                        <Text style={styles.pickBadgeText}>Editor&apos;s pick</Text>
+                      </View>
+                    ) : null}
                     <View style={styles.pickBody}>
                       <Text style={styles.pickKicker}>{editorsPick.category}</Text>
                       <Text style={styles.pickName} numberOfLines={1}>
@@ -328,7 +333,10 @@ export default function Explore() {
           </View>
         }
         ListEmptyComponent={
-          mode === "map" ? null : loading ? (
+          // Only when nothing matched. A single result becomes the pick
+          // above and leaves this list empty, which used to print "1 place"
+          // followed by "Nothing here yet".
+          mode === "map" || refined.length > 0 ? null : loading ? (
             <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
               <ActivityIndicator color={colors.brandPrimary} />
             </View>
@@ -356,7 +364,10 @@ export default function Explore() {
       />
 
       {mode === "map" ? (
-        <View style={styles.mapWrap}>
+        // Below the header, which is pushed down by the status bar. A fixed
+        // top put the map over the Browse/Map switch on phones with a notch,
+        // leaving no way back to Browse.
+        <View style={[styles.mapWrap, { top: insets.top + 230 }]}>
           <MapPane
             businesses={refined}
             city={cityName}
