@@ -20,6 +20,11 @@ from models import (
 
 router = APIRouter()
 
+# What the public catalogue shows. Delisting a place (is_approved False) hid
+# it from search and its web page, but Saved, bookings and reviews still
+# treated it as live.
+LISTED = {"is_approved": {"$ne": False}}
+
 
 # --- Saved (favorites) ----------------------------------------------------
 @router.get("/saved")
@@ -31,8 +36,10 @@ async def get_saved(current=Depends(get_current_user)):
     ids = doc.get("business_ids", [])
     if not ids:
         return []
+    # Listed places only. A place an admin delisted stayed in everyone's
+    # Saved, still openable and bookable from there.
     businesses = await db.businesses.find(
-        {"business_id": {"$in": ids}}, {"_id": 0}
+        {"business_id": {"$in": ids}, **LISTED}, {"_id": 0}
     ).to_list(200)
     return businesses
 
@@ -90,7 +97,8 @@ def booking_amount(biz: dict, service_name: Optional[str], guests: int) -> tuple
 
 @router.post("/bookings", response_model=Booking)
 async def create_booking(payload: BookingCreate, current=Depends(get_current_user)):
-    biz = await db.businesses.find_one({"business_id": payload.business_id}, {"_id": 0})
+    # Listed places only: a delisted place could still be booked from Saved.
+    biz = await db.businesses.find_one({"business_id": payload.business_id, **LISTED}, {"_id": 0})
     if not biz:
         raise HTTPException(status_code=404, detail="Business not found")
     amount, amount_source = booking_amount(biz, payload.service_name, payload.guests)
@@ -158,7 +166,7 @@ async def create_review(
     original date. The place's rating is then recomputed from its reviews.
     """
     await rate_limit("review", client_key(request, current), limit=10, window_sec=60)
-    if not await db.businesses.find_one({"business_id": payload.business_id}, {"_id": 1}):
+    if not await db.businesses.find_one({"business_id": payload.business_id, **LISTED}, {"_id": 1}):
         raise HTTPException(status_code=404, detail="Business not found")
 
     key = {"business_id": payload.business_id, "user_id": current["user_id"]}

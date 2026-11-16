@@ -1,5 +1,7 @@
 """Cities, categories, businesses & banners (public reads)."""
+import math
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -8,6 +10,18 @@ from core.db import db
 from seed.data import CATEGORIES, CITIES, CITY_COORDS
 
 router = APIRouter()
+
+
+def _distance_km(a: dict, b: dict) -> float:
+    """Great-circle distance between two places; places without coordinates
+    sort last rather than failing."""
+    try:
+        lat1, lng1, lat2, lng2 = (math.radians(float(v)) for v in (a["lat"], a["lng"], b["lat"], b["lng"]))
+    except (KeyError, TypeError, ValueError):
+        return math.inf
+    h = (math.sin((lat2 - lat1) / 2) ** 2
+         + math.cos(lat1) * math.cos(lat2) * math.sin((lng2 - lng1) / 2) ** 2)
+    return 2 * 6371 * math.asin(math.sqrt(h))
 
 
 def _with_region(city: dict) -> dict:
@@ -184,16 +198,73 @@ async def get_business_by_slug(slug: str):
     return doc
 
 
+TRENDING_WINDOW_DAYS = 30
+
+
+async def _recent_engagement(ids: list, since: datetime) -> dict:
+    """{business_id: how many things people did with it since `since`}.
+
+    Counts interested/going/visited flags, reviews written or revised,
+    bookings that weren't cancelled, and likes on the place's reels. Saves
+    are left out: the saved list keeps no dates, so it can't say "recent".
+    """
+    counts: dict = {}
+
+    def add(rows, key=lambda r: r["_id"]):
+        for r in rows:
+            counts[key(r)] = counts.get(key(r), 0) + r["n"]
+
+    per_place = {"$group": {"_id": "$business_id", "n": {"$sum": 1}}}
+    in_ids = {"$in": ids}
+    add(await db.place_interest.aggregate([
+        {"$match": {"business_id": in_ids, "updated_at": {"$gte": since}}}, per_place,
+    ]).to_list(None))
+    add(await db.reviews.aggregate([
+        {"$match": {"business_id": in_ids, "$or": [{"created_at": {"$gte": since}},
+                                                   {"updated_at": {"$gte": since}}]}}, per_place,
+    ]).to_list(None))
+    add(await db.bookings.aggregate([
+        {"$match": {"business_id": in_ids, "created_at": {"$gte": since}, "status": {"$ne": "cancelled"}}},
+        per_place,
+    ]).to_list(None))
+    reels = await db.reels.find({"business_id": in_ids}, {"_id": 0, "reel_id": 1, "business_id": 1}).to_list(5000)
+    if reels:
+        place_of = {r["reel_id"]: r["business_id"] for r in reels}
+        add(await db.reel_likes.aggregate([
+            {"$match": {"reel_id": {"$in": list(place_of)}, "created_at": {"$gte": since}}},
+            {"$group": {"_id": "$reel_id", "n": {"$sum": 1}}},
+        ]).to_list(None), key=lambda r: place_of[r["_id"]])
+    return counts
+
+
 @router.get("/businesses/trending")
-async def trending(city: Optional[str] = None, limit: int = 8):
+async def trending(city: Optional[str] = None, limit: int = Query(default=8, ge=1, le=50)):
+    """What people in the city are engaging with now.
+
+    This used to be the highest-rated places. Ratings come from real
+    reviews now and most places have none, so in Pune a dentist and a
+    university were "trending". It now lists only places with engagement
+    in the last 30 days (see _recent_engagement), most first, each with its
+    `trend_score`. A quiet city gets an empty list and the app hides the
+    section: padding it with featured places just repeated the "Featured
+    this week" row above it.
+    """
     query: dict = {"is_approved": {"$ne": False}}
     if city:
         query["city"] = city.lower()
-    docs = (
-        await db.businesses.find(query, {"_id": 0})
-        .sort("rating", -1).limit(limit).to_list(limit)
-    )
-    return docs
+    places = await db.businesses.find(query, {"_id": 0}).to_list(5000)
+    if not places:
+        return []
+    since = datetime.now(timezone.utc) - timedelta(days=TRENDING_WINDOW_DAYS)
+    score = await _recent_engagement([b["business_id"] for b in places], since)
+    hot = [{**b, "trend_score": score[b["business_id"]]} for b in places if score.get(b["business_id"])]
+    hot.sort(key=lambda b: (
+        -b["trend_score"],
+        -(b.get("rating") or 0),
+        -(b.get("review_count") or 0),
+        b.get("name") or "",
+    ))
+    return hot[:limit]
 
 
 @router.get("/businesses/{business_id}")
@@ -214,29 +285,26 @@ async def nearby(business_id: str, limit: int = Query(default=3, ge=1, le=10)):
     to the same category when the city is too thin to fill the row.
     """
     biz = await db.businesses.find_one(
-        {"business_id": business_id}, {"_id": 0, "city": 1, "category": 1}
+        {"business_id": business_id}, {"_id": 0, "city": 1, "category": 1, "lat": 1, "lng": 1}
     )
     if not biz:
         raise HTTPException(status_code=404, detail="Business not found")
 
-    base = {
-        "is_approved": {"$ne": False},
-        "city": biz.get("city"),
-        "business_id": {"$ne": business_id},
-    }
-    others = (
-        await db.businesses.find(
-            {**base, "category": {"$ne": biz.get("category")}}, {"_id": 0}
-        ).sort("rating", -1).limit(limit).to_list(limit)
-    )
-    if len(others) < limit:
-        short = limit - len(others)
-        others += (
-            await db.businesses.find(
-                {**base, "category": biz.get("category")}, {"_id": 0}
-            ).sort("rating", -1).limit(short).to_list(short)
-        )
-    return others
+    # Nearest first. This used to sort by rating across the whole city, so
+    # "worth the walk" could be the other end of Goa (Casa Sarita was offered
+    # places 4.8, 7.6 and 3.5 km away with two next door). A city is at most
+    # a few hundred places, so measuring each one here is cheap.
+    candidates = await db.businesses.find(
+        {"is_approved": {"$ne": False}, "city": biz.get("city"), "business_id": {"$ne": business_id}},
+        {"_id": 0},
+    ).to_list(1000)
+
+    def away(b: dict) -> float:
+        return _distance_km(biz, b)
+
+    others = sorted((b for b in candidates if b.get("category") != biz.get("category")), key=away)
+    same = sorted((b for b in candidates if b.get("category") == biz.get("category")), key=away)
+    return (others + same)[:limit]
 
 
 @router.get("/banners")

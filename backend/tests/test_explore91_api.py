@@ -71,12 +71,13 @@ class TestBusinesses:
         assert all(d["is_featured"] is True for d in docs)
 
     def test_trending_pune(self, api_client, base_url):
+        # Trending is recent engagement, not rating, and may be empty in a
+        # quiet city (test_discovery_lists covers the ranking itself).
         r = api_client.get(f"{base_url}/api/businesses/trending", params={"city": "pune"})
         assert r.status_code == 200
         docs = r.json()
-        assert len(docs) > 0
-        ratings = [d["rating"] for d in docs]
-        assert ratings == sorted(ratings, reverse=True)
+        scores = [d["trend_score"] for d in docs]
+        assert scores == sorted(scores, reverse=True) and all(s > 0 for s in scores)
         assert all(d["city"] == "pune" for d in docs)
 
     def test_get_by_id(self, api_client, base_url):

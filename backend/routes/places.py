@@ -27,8 +27,11 @@ INTENTS = ("interested", "going", "visited")
 
 
 async def _business_or_404(business_id: str) -> dict:
+    # Listed places only, like the public catalogue: a delisted place could
+    # still be flagged "going" from Saved or an old link.
     biz = await db.businesses.find_one(
-        {"business_id": business_id}, {"_id": 0, "business_id": 1, "city": 1, "name": 1}
+        {"business_id": business_id, "is_approved": {"$ne": False}},
+        {"_id": 0, "business_id": 1, "city": 1, "name": 1},
     )
     if not biz:
         raise HTTPException(status_code=404, detail="Place not found")
@@ -75,8 +78,10 @@ async def list_interest(
         return []
 
     ids = [r["business_id"] for r in rows]
+    # Listed places only. The comment below meant to drop delisted places,
+    # but this matched deleted ones only: is_approved False rows came back.
     found = await db.businesses.find(
-        {"business_id": {"$in": ids}}, {"_id": 0}
+        {"business_id": {"$in": ids}, "is_approved": {"$ne": False}}, {"_id": 0}
     ).to_list(len(ids))
     by_id = {b["business_id"]: b for b in found}
 
