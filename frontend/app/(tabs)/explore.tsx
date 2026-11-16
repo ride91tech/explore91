@@ -45,7 +45,16 @@ export default function Explore() {
   const current = useCity();
   const params = useLocalSearchParams<{ category?: string }>();
   const [q, setQ] = useState("");
-  const [category, setCategory] = useState<string | null>(params.category ?? null);
+  // The URL is the one source of truth for the category. It used to be
+  // copied into state only when the param changed, and the chips never
+  // updated it: tap Cafés on Home, pick "All" here, go Home and tap Cafés
+  // again, and the param was still "cafes", so nothing changed and Explore
+  // stayed on All (a web refresh also brought back the old category).
+  const category = params.category || null;
+  const setCategory = useCallback(
+    (slug: string | null) => router.setParams({ category: slug ?? undefined }),
+    [router]
+  );
   const [categories, setCategories] = useState<CategoryT[]>([]);
   const [city, setCity] = useState<CityT | null>(null);
   const [results, setResults] = useState<Business[]>([]);
@@ -63,10 +72,6 @@ export default function Explore() {
       .then((all) => setCity(all.find((c) => c.slug === citySlug) ?? null))
       .catch(() => {});
   }, [citySlug]);
-
-  useEffect(() => {
-    if (params.category) setCategory(params.category);
-  }, [params.category]);
 
   // Every keystroke (after the debounce) starts a request, and replies can
   // arrive out of order: a slow reply for "ca" landing after the one for
